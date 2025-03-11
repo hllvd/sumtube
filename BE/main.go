@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,7 +26,6 @@ const bucketName = "sumtube"
 var s3Client *s3.Client
 
 // Initialize AWS SDK and create an S3 client
-// Initialize AWS SDK and create an S3 client
 func init() {
 	fmt.Println("Initializing AWS SDK...")
 	cfg, err := config.LoadDefaultConfig(context.Background(),
@@ -35,7 +37,6 @@ func init() {
 	s3Client = s3.NewFromConfig(cfg)
 	fmt.Println("AWS SDK initialized successfully.")
 }
-
 
 // downloadSubtitle downloads the subtitle from a YouTube video using yt-dlp
 func downloadSubtitle(videoURL string) (string, error) {
@@ -91,6 +92,102 @@ func uploadToS3(content string, key string) error {
 	return nil
 }
 
+// summarizeText sends a request to DeepSeek API to summarize the text
+func summarizeText(caption string) (string, error) {
+	// DeepSeek API URL
+	apiURL := "https://api.deepseek.com/chat/completions"
+
+	// Read the API key from the environment variable
+	apiKey := os.Getenv("DEEPSEEK_API_KEY")
+	if apiKey == "" {
+		return "", fmt.Errorf("DEEPSEEK_API_KEY environment variable is not set")
+	}
+
+	// Prepare the request body
+	requestBody := map[string]interface{}{
+		"model": "deepseek-chat", // Specify the model
+		"messages": []map[string]string{
+			{
+				"role":    "system",
+				"content": "You are a helpful assistant.",
+			},
+			{
+				"role":    "user",
+				"content": fmt.Sprintf("I would like to summarize this text into less than 200 words: %s", caption),
+			},
+		},
+		"stream": false, // Disable streaming for a single response
+	}
+
+	// Marshal the request body into JSON
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal request body: %w", err)
+	}
+
+	// Create a new HTTP request
+	req, err := http.NewRequest("POST", apiURL, bytes.NewReader(jsonData))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey) // Use the API key from the environment variable
+
+	// Make the HTTP request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to send request to DeepSeek: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read the response
+	responseData, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// Debugging: Print the response status and body
+	fmt.Printf("DeepSeek API Response Status: %s\n", resp.Status)
+	fmt.Printf("DeepSeek API Response Body: %s\n", string(responseData))
+
+	// Check for successful response (e.g., 200 status code)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("received non-200 response from DeepSeek: %s, response: %s", resp.Status, string(responseData))
+	}
+
+	// Parse the response JSON
+	var result map[string]interface{}
+	if err := json.Unmarshal(responseData, &result); err != nil {
+		return "", fmt.Errorf("failed to parse response JSON: %w", err)
+	}
+
+	// Extract the summarized text from the response
+	choices, exists := result["choices"].([]interface{})
+	if !exists || len(choices) == 0 {
+		return "", fmt.Errorf("no choices found in response")
+	}
+
+	firstChoice, ok := choices[0].(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("invalid choice format in response")
+	}
+
+	message, exists := firstChoice["message"].(map[string]interface{})
+	if !exists {
+		return "", fmt.Errorf("no message found in choice")
+	}
+
+	summary, exists := message["content"].(string)
+	if !exists {
+		return "", fmt.Errorf("no content found in message")
+	}
+
+	return summary, nil
+}
+
 func main() {
 	// Example YouTube video URL
 	videoURL := "https://www.youtube.com/watch?v=dREhPVW5tb8" // replace with a valid YouTube URL
@@ -113,4 +210,14 @@ func main() {
 	if err := uploadToS3(subtitle, subtitleKey); err != nil {
 		log.Fatalf("Error uploading subtitle to S3: %v\n", err)
 	}
+
+	// Summarize the caption using DeepSeek
+	fmt.Println("Sending caption to DeepSeek for summarization...")
+	summary, err := summarizeText(subtitle)
+	if err != nil {
+		log.Fatalf("Error summarizing caption: %v\n", err)
+	}
+
+	// Output the summarized text
+	fmt.Println("Summarized Caption: \n", summary)
 }
