@@ -109,7 +109,7 @@ func summarizeText(caption string) (string, error) {
 		"messages": []map[string]string{
 			{
 				"role":    "system",
-				"content": "You are a helpful assistant.",
+				"content": fmt.Sprintf("You are a helpful assistant. Please use the current language of the text to output the summary. The output would be a json file like this example: {content:'summarized text here', lang:'PT'}"),
 			},
 			{
 				"role":    "user",
