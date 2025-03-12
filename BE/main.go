@@ -10,7 +10,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"unicode"
 
 	"context"
 
@@ -38,14 +40,66 @@ func init() {
 	fmt.Println("AWS SDK initialized successfully.")
 }
 
+// VideoMetadata represents the metadata of a YouTube video
+type VideoMetadata struct {
+	Title    string `json:"title"`
+	Language string `json:"language"`
+}
+
+// GetVideoMetadata fetches the title and language of a YouTube video using yt-dlp
+func getVideoMetadata(videoURL string) (string, string, error) {
+	// Run yt-dlp to fetch video metadata in JSON format
+	cmd := exec.Command("yt-dlp", "--dump-json", videoURL)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to run yt-dlp: %w", err)
+	}
+
+	// Parse the JSON output
+	var metadata VideoMetadata
+	if err := json.Unmarshal(output, &metadata); err != nil {
+		return "", "", fmt.Errorf("failed to parse metadata: %w", err)
+	}
+
+	// Return the video title and language
+	return metadata.Title, metadata.Language, nil
+}
+
+
+
+func convertTitleToURL(title string) string {
+	// Convert the title to lowercase
+	lowercaseTitle := strings.ToLower(title)
+
+	// Replace spaces with hyphens
+	urlFriendly := strings.ReplaceAll(lowercaseTitle, " ", "-")
+
+	// Remove any non-alphanumeric characters (except hyphens)
+	var result strings.Builder
+	for _, char := range urlFriendly {
+		if unicode.IsLetter(char) || unicode.IsDigit(char) || char == '-' {
+			result.WriteRune(char)
+		}
+	}
+
+	return result.String()
+}
+
 // downloadSubtitle downloads the subtitle from a YouTube video using yt-dlp
-func downloadSubtitle(videoURL string) (string, error) {
+func downloadSubtitle(videoURL string, lang string) (string, error) {
 	// Build the output file template
 	outputTemplate := filepath.Join(tempDir, "%(id)s.%(ext)s")
 
 	fmt.Println("Downloading subtitles using yt-dlp...")
 	// Run yt-dlp to download auto-subtitles in VTT format
-	cmd := exec.Command("yt-dlp", "--skip-download", "--write-auto-sub", "--sub-lang", "en", "-o", outputTemplate, videoURL)
+	cmd := exec.Command("yt-dlp",
+		"--skip-download",          // Skip downloading the video
+		"--write-auto-sub",         // Download auto-generated subtitles
+        "--sub-lang", lang,         // Specify the subtitle language
+		"--convert-subs", "srt",    // Convert subtitles to SRT format
+		"-o", outputTemplate,       // Output file template
+		videoURL,                   // Video URL
+	)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -79,11 +133,11 @@ func downloadSubtitle(videoURL string) (string, error) {
 func uploadToS3(content string, key string) error {
 	fmt.Println("Uploading subtitle to S3...")
 	_, err := s3Client.PutObject(context.Background(), &s3.PutObjectInput{
-		Bucket: aws.String(bucketName),
-		Key:    aws.String(key),
-		Body:   strings.NewReader(content),
+		Bucket:      aws.String(bucketName),
+		Key:         aws.String(key),
+		Body:        strings.NewReader(content),
 		ContentType: aws.String("text/plain"),
-		ACL:    types.ObjectCannedACLPrivate,
+		ACL:         types.ObjectCannedACLPrivate,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to upload to S3: %w", err)
@@ -92,8 +146,27 @@ func uploadToS3(content string, key string) error {
 	return nil
 }
 
+func filterSubtitleBlocks(subtitle string) string {
+	// Regex to match blocks with more than two lines of text
+	reMultiLineBlocks := regexp.MustCompile(`(?m)^.*\n.*\n.*$`)
+
+	// Split the subtitle into individual blocks
+	blocks := strings.Split(subtitle, "\n\n")
+
+	var filteredBlocks []string
+	for _, block := range blocks {
+		// Check if the block has more than two lines of text
+		if !reMultiLineBlocks.MatchString(block) {
+			filteredBlocks = append(filteredBlocks, block)
+		}
+	}
+
+	// Join the filtered blocks back into a single string
+	return strings.Join(filteredBlocks, "\n\n")
+}
+
 // summarizeText sends a request to DeepSeek API to summarize the text
-func summarizeText(caption string) (string, error) {
+func summarizeText(caption string, lang string, title string) (string, error) {
 	// DeepSeek API URL
 	apiURL := "https://api.deepseek.com/chat/completions"
 
@@ -109,11 +182,15 @@ func summarizeText(caption string) (string, error) {
 		"messages": []map[string]string{
 			{
 				"role":    "system",
-				"content": fmt.Sprintf("You are a helpful assistant. Please use the current language of the text to output the summary. The output would be a json file like this example: {content:'summarized text here', lang:'PT'}"),
+				"content": fmt.Sprintf(`You are a helpful assistant. 
+                    Please use the current language of the text to output the summary. 
+                    The summarized text should be in markdown format. 
+                    If the title of the text has a question, need to answer that question in the content and in the 'answer' property of the json. 
+                    The output would be a json file like this example: {content:"summarized text here", lang:"%s", answer:"answer here"}.`,lang),
 			},
 			{
 				"role":    "user",
-				"content": fmt.Sprintf("I would like to summarize this text into less than 200 words: %s", caption),
+				"content": fmt.Sprintf("I would like to summarize this text with title %s in %s language, into less than 200 words: %s", title, lang, caption),
 			},
 		},
 		"stream": false, // Disable streaming for a single response
@@ -188,32 +265,52 @@ func summarizeText(caption string) (string, error) {
 	return summary, nil
 }
 
+func sanitizeSubtitle(subtitle string) string {
+    re := regexp.MustCompile(`\s*\n\n[\s\S]*?</c>\n`)
+    // Replace matches with an empty string
+    summarizedSrt := re.ReplaceAllString(subtitle, "\n")
+    summarizedSanitized := strings.ReplaceAll(summarizedSrt, "align:start position:0%", "")
+    return summarizedSanitized
+}
+
 func main() {
 	// Example YouTube video URL
 	videoURL := "https://www.youtube.com/watch?v=dREhPVW5tb8" // replace with a valid YouTube URL
 
+	// Fetch video metadata (title and language)
+	fmt.Println("Fetching video metadata...")
+	title, language, err := getVideoMetadata(videoURL)
+	if err != nil {
+		log.Fatalf("Error fetching video metadata: %v\n", err)
+	}
+	fmt.Printf("Video Title: %s\n", title)
+	fmt.Printf("Video Language: %s\n", language)
+
 	// Download subtitle
 	fmt.Println("Starting subtitle download...")
-	subtitle, err := downloadSubtitle(videoURL)
+	subtitle, err := downloadSubtitle(videoURL,language)
 	if err != nil {
 		log.Fatalf("Error downloading subtitle: %v\n", err)
 	}
 
 	// Print subtitle content (for debugging purposes)
-	fmt.Println("Subtitles: \n", subtitle)
+	fmt.Println("Metadata: \n", title, language)
 
 	// Create S3 key for the subtitle file (using video ID)
 	videoID := "dREhPVW5tb8" // Replace with actual video ID extraction logic if needed
 	subtitleKey := videoID + "-caption.txt"
+    
+    subtitleSanitized := sanitizeSubtitle(subtitle)
+
 
 	// Upload subtitle to S3
-	if err := uploadToS3(subtitle, subtitleKey); err != nil {
+	if err := uploadToS3(subtitleSanitized, subtitleKey); err != nil {
 		log.Fatalf("Error uploading subtitle to S3: %v\n", err)
 	}
 
 	// Summarize the caption using DeepSeek
 	fmt.Println("Sending caption to DeepSeek for summarization...")
-	summary, err := summarizeText(subtitle)
+	summary, err := summarizeText(subtitleSanitized, language, title)
 	if err != nil {
 		log.Fatalf("Error summarizing caption: %v\n", err)
 	}
