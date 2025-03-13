@@ -45,6 +45,20 @@ func init() {
 	fmt.Println("AWS SDK initialized successfully.")
 }
 
+func extractVideoID(url string) (string, error) {
+	// Define the regex pattern
+	re := regexp.MustCompile(`(?:v=|\/)([0-9A-Za-z_-]{11}).*`)
+
+	// Find the video ID
+	matches := re.FindStringSubmatch(url)
+	if len(matches) < 2 {
+		return "", fmt.Errorf("no video ID found in URL: %s", url)
+	}
+
+	// Return the video ID (second match in the slice)
+	return matches[1], nil
+}
+
 // VideoMetadata represents the metadata of a YouTube video
 type VideoMetadata struct {
 	Title    string `json:"title"`
@@ -179,25 +193,6 @@ func pushToDynamoDB(videoID string, lang string, title string, summary string, p
 	return nil
 }
 
-func filterSubtitleBlocks(subtitle string) string {
-	// Regex to match blocks with more than two lines of text
-	reMultiLineBlocks := regexp.MustCompile(`(?m)^.*\n.*\n.*$`)
-
-	// Split the subtitle into individual blocks
-	blocks := strings.Split(subtitle, "\n\n")
-
-	var filteredBlocks []string
-	for _, block := range blocks {
-		// Check if the block has more than two lines of text
-		if !reMultiLineBlocks.MatchString(block) {
-			filteredBlocks = append(filteredBlocks, block)
-		}
-	}
-
-	// Join the filtered blocks back into a single string
-	return strings.Join(filteredBlocks, "\n\n")
-}
-
 // summarizeText sends a request to DeepSeek API to summarize the text
 func summarizeText(caption string, lang string, title string) (string, error) {
 	// DeepSeek API URL
@@ -309,6 +304,12 @@ func sanitizeSubtitle(subtitle string) string {
 func main() {
 	// Example YouTube video URL
 	videoURL := "https://www.youtube.com/watch?v=dREhPVW5tb8" // replace with a valid YouTube URL
+    
+    videoID, err := extractVideoID(videoURL)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
 
 	// Fetch video metadata (title and language)
 	fmt.Println("Fetching video metadata...")
@@ -330,7 +331,6 @@ func main() {
 	fmt.Println("Metadata: \n", title, language)
 
 	// Create S3 key for the subtitle file (using video ID)
-	videoID := "dREhPVW5tb8" // Replace with actual video ID extraction logic if needed
 	subtitleKey := videoID + "-caption.txt"
 
 	subtitleSanitized := sanitizeSubtitle(subtitle)
