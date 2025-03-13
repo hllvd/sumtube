@@ -104,6 +104,8 @@ func convertTitleToURL(title string) string {
 
 // downloadSubtitle downloads the subtitle from a YouTube video using yt-dlp
 func downloadSubtitle(videoURL string, lang string) (string, error) {
+
+    videoID, err := extractVideoID(videoURL)
 	// Build the output file template
 	outputTemplate := filepath.Join(tempDir, "%(id)s.%(ext)s")
 
@@ -114,6 +116,7 @@ func downloadSubtitle(videoURL string, lang string) (string, error) {
 		"--write-auto-sub",         // Download auto-generated subtitles
 		"--sub-lang", lang,         // Specify the subtitle language
 		"--convert-subs", "srt",    // Convert subtitles to SRT format
+        "-k",
 		"-o", outputTemplate,       // Output file template
 		videoURL,                   // Video URL
 	)
@@ -124,7 +127,9 @@ func downloadSubtitle(videoURL string, lang string) (string, error) {
 	}
 
 	// Extract the file name (assuming the video ID will be used as the name)
-	subtitleFilePath := filepath.Join(tempDir, "*.vtt")
+    searchQuery := fmt.Sprintf("%s*.vtt", videoID)
+    fmt.Println("searchQuery : ", searchQuery)
+	subtitleFilePath := filepath.Join(tempDir, searchQuery)
 	files, err := filepath.Glob(subtitleFilePath)
 	if err != nil {
 		return "", fmt.Errorf("error finding subtitle file: %w", err)
@@ -142,6 +147,7 @@ func downloadSubtitle(videoURL string, lang string) (string, error) {
 		return "", fmt.Errorf("failed to read subtitle file: %w", err)
 	}
 
+    fmt.Println("data : ", string(data))
 	// Return subtitle text
 	return string(data), nil
 }
@@ -303,7 +309,8 @@ func sanitizeSubtitle(subtitle string) string {
 
 func main() {
 	// Example YouTube video URL
-	videoURL := "https://www.youtube.com/watch?v=dREhPVW5tb8" // replace with a valid YouTube URL
+	//videoURL := "https://www.youtube.com/watch?v=dREhPVW5tb8" // replace with a valid YouTube URL
+    videoURL := "https://www.youtube.com/watch?v=QuiSpfXnhzU"
     
     videoID, err := extractVideoID(videoURL)
 	if err != nil {
