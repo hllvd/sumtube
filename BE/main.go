@@ -18,16 +18,20 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types" // Alias for dynamo
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 const tempDir = "/tmp"
 const bucketName = "sumtube"
+const dynamoDBTableName = "SummarizedSubtitles" // Replace with your DynamoDB table name
 
 var s3Client *s3.Client
+var dynamoDBClient *dynamodb.Client
 
-// Initialize AWS SDK and create an S3 client
+// Initialize AWS SDK and create S3 and DynamoDB clients
 func init() {
 	fmt.Println("Initializing AWS SDK...")
 	cfg, err := config.LoadDefaultConfig(context.Background(),
@@ -37,6 +41,7 @@ func init() {
 		log.Fatalf("unable to load AWS SDK config, %v\n", err)
 	}
 	s3Client = s3.NewFromConfig(cfg)
+	dynamoDBClient = dynamodb.NewFromConfig(cfg)
 	fmt.Println("AWS SDK initialized successfully.")
 }
 
@@ -141,6 +146,36 @@ func uploadToS3(content string, key string) error {
 		return fmt.Errorf("failed to upload to S3: %w", err)
 	}
 	fmt.Println("Subtitle uploaded to S3 successfully.")
+	return nil
+}
+
+// pushToDynamoDB pushes the summarized text to DynamoDB
+func pushToDynamoDB(videoID string, lang string, title string, summary string, s3Path string) error {
+	// Create the composite key
+	compositeKey := fmt.Sprintf("%s#%s", videoID, lang)
+
+	// Prepare the item to be inserted/updated
+	item := map[string]dynamodbtypes.AttributeValue{
+		"id": &dynamodbtypes.AttributeValueMemberS{Value: compositeKey}, // Composite key
+		"data": &dynamodbtypes.AttributeValueMemberM{ // JSON data
+			Value: map[string]dynamodbtypes.AttributeValue{
+				"content": &dynamodbtypes.AttributeValueMemberS{Value: summary},
+				"title":   &dynamodbtypes.AttributeValueMemberS{Value: title},
+				"path":    &dynamodbtypes.AttributeValueMemberS{Value: s3Path},
+			},
+		},
+	}
+
+	// Put the item into DynamoDB
+	_, err := dynamoDBClient.PutItem(context.Background(), &dynamodb.PutItemInput{
+		TableName: aws.String(dynamoDBTableName),
+		Item:      item,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to push to DynamoDB: %w", err)
+	}
+
+	fmt.Println("Data pushed to DynamoDB successfully.")
 	return nil
 }
 
@@ -316,4 +351,10 @@ func main() {
 
 	// Output the summarized text
 	fmt.Println("Summarized Caption: \n", summary)
+
+	// Push the summarized text to DynamoDB
+	s3Path := fmt.Sprintf("s3://%s/%s", bucketName, subtitleKey)
+	if err := pushToDynamoDB(videoID, language, title, summary, s3Path); err != nil {
+		log.Fatalf("Error pushing to DynamoDB: %v\n", err)
+	}
 }
