@@ -150,7 +150,7 @@ func uploadToS3(content string, key string) error {
 }
 
 // pushToDynamoDB pushes the summarized text to DynamoDB
-func pushToDynamoDB(videoID string, lang string, title string, summary string, s3Path string) error {
+func pushToDynamoDB(videoID string, lang string, title string, summary string, path string) error {
 	// Create the composite key
 	compositeKey := fmt.Sprintf("%s#%s", videoID, lang)
 
@@ -161,7 +161,7 @@ func pushToDynamoDB(videoID string, lang string, title string, summary string, s
 			Value: map[string]dynamodbtypes.AttributeValue{
 				"content": &dynamodbtypes.AttributeValueMemberS{Value: summary},
 				"title":   &dynamodbtypes.AttributeValueMemberS{Value: title},
-				"path":    &dynamodbtypes.AttributeValueMemberS{Value: s3Path},
+				"path":    &dynamodbtypes.AttributeValueMemberS{Value: path},
 			},
 		},
 	}
@@ -352,9 +352,10 @@ func main() {
 	// Output the summarized text
 	fmt.Println("Summarized Caption: \n", summary)
 
+    
 	// Push the summarized text to DynamoDB
-	s3Path := fmt.Sprintf("s3://%s/%s", bucketName, subtitleKey)
-	if err := pushToDynamoDB(videoID, language, title, summary, s3Path); err != nil {
+    path := convertTitleToURL(title)
+	if err := pushToDynamoDB(videoID, language, title, summary, path); err != nil {
 		log.Fatalf("Error pushing to DynamoDB: %v\n", err)
 	}
 }
