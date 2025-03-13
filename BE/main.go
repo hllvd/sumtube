@@ -65,8 +65,6 @@ func getVideoMetadata(videoURL string) (string, string, error) {
 	return metadata.Title, metadata.Language, nil
 }
 
-
-
 func convertTitleToURL(title string) string {
 	// Convert the title to lowercase
 	lowercaseTitle := strings.ToLower(title)
@@ -95,7 +93,7 @@ func downloadSubtitle(videoURL string, lang string) (string, error) {
 	cmd := exec.Command("yt-dlp",
 		"--skip-download",          // Skip downloading the video
 		"--write-auto-sub",         // Download auto-generated subtitles
-        "--sub-lang", lang,         // Specify the subtitle language
+		"--sub-lang", lang,         // Specify the subtitle language
 		"--convert-subs", "srt",    // Convert subtitles to SRT format
 		"-o", outputTemplate,       // Output file template
 		videoURL,                   // Video URL
@@ -186,7 +184,7 @@ func summarizeText(caption string, lang string, title string) (string, error) {
                     Please use the current language of the text to output the summary. 
                     The summarized text should be in markdown format. 
                     If the title of the text has a question, need to answer that question in the content and in the 'answer' property of the json. 
-                    The output would be a json file like this example: {content:"summarized text here", lang:"%s", answer:"answer here"}.`,lang),
+                    The output would be a json file like this example: {content:"summarized text here", lang:"%s", answer:"answer here"}.`, lang),
 			},
 			{
 				"role":    "user",
@@ -266,11 +264,11 @@ func summarizeText(caption string, lang string, title string) (string, error) {
 }
 
 func sanitizeSubtitle(subtitle string) string {
-    re := regexp.MustCompile(`\s*\n\n[\s\S]*?</c>\n`)
-    // Replace matches with an empty string
-    summarizedSrt := re.ReplaceAllString(subtitle, "\n")
-    summarizedSanitized := strings.ReplaceAll(summarizedSrt, "align:start position:0%", "")
-    return summarizedSanitized
+	re := regexp.MustCompile(`\s*\n\n[\s\S]*?</c>\n`)
+	// Replace matches with an empty string
+	summarizedSrt := re.ReplaceAllString(subtitle, "\n")
+	summarizedSanitized := strings.ReplaceAll(summarizedSrt, "align:start position:0%", "")
+	return summarizedSanitized
 }
 
 func main() {
@@ -288,7 +286,7 @@ func main() {
 
 	// Download subtitle
 	fmt.Println("Starting subtitle download...")
-	subtitle, err := downloadSubtitle(videoURL,language)
+	subtitle, err := downloadSubtitle(videoURL, language)
 	if err != nil {
 		log.Fatalf("Error downloading subtitle: %v\n", err)
 	}
@@ -299,14 +297,15 @@ func main() {
 	// Create S3 key for the subtitle file (using video ID)
 	videoID := "dREhPVW5tb8" // Replace with actual video ID extraction logic if needed
 	subtitleKey := videoID + "-caption.txt"
-    
-    subtitleSanitized := sanitizeSubtitle(subtitle)
 
+	subtitleSanitized := sanitizeSubtitle(subtitle)
 
-	// Upload subtitle to S3
-	if err := uploadToS3(subtitleSanitized, subtitleKey); err != nil {
-		log.Fatalf("Error uploading subtitle to S3: %v\n", err)
-	}
+	// Upload subtitle to S3 asynchronously
+	go func() {
+		if err := uploadToS3(subtitleSanitized, subtitleKey); err != nil {
+			log.Printf("Error uploading subtitle to S3: %v\n", err)
+		}
+	}()
 
 	// Summarize the caption using DeepSeek
 	fmt.Println("Sending caption to DeepSeek for summarization...")
