@@ -22,7 +22,18 @@ import (
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
 )
+
+// OAuth2 configuration for Google
+var googleOAuthConfig = &oauth2.Config{
+	ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),     // Set your Google OAuth Client ID
+	ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"), // Set your Google OAuth Client Secret
+	RedirectURL:  "http://localhost:8080/redirect",  // Redirect URL must match the one configured in Google Console
+	Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email"},
+	Endpoint:     google.Endpoint,
+}
 
 const tempDir = "/tmp"
 const bucketName = "sumtube"
@@ -349,8 +360,41 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Handle Google OAuth2 redirect
+func handleGoogleRedirect(w http.ResponseWriter, r *http.Request) {
+	code := r.URL.Query().Get("code")
+	if code == "" {
+		http.Error(w, "Authorization code not found", http.StatusBadRequest)
+		return
+	}
+
+	// Exchange the authorization code for an access token
+	token, err := googleOAuthConfig.Exchange(context.Background(), code)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to exchange token: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Save the access token to a file
+	err = ioutil.WriteFile(".access-token", []byte(token.AccessToken), 0600)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to save access token: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Fprintf(w, "Successfully authenticated and saved access token to .access-token")
+}
+
+// Start Google OAuth2 flow
+func handleGoogleLogin(w http.ResponseWriter, r *http.Request) {
+	url := googleOAuthConfig.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
+	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
+}
+
 func main() {
 	http.HandleFunc("/summary", handleSummaryRequest)
+    http.HandleFunc("/redirect", handleGoogleRedirect) // OAuth2 redirect endpoint
+	http.HandleFunc("/login", handleGoogleLogin)      // Start OAuth2 flow
 	fmt.Println("Server started at :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
