@@ -30,8 +30,13 @@ import (
 var googleOAuthConfig = &oauth2.Config{
 	ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),     // Set your Google OAuth Client ID
 	ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"), // Set your Google OAuth Client Secret
-	RedirectURL:  "http://localhost:8080/redirect",  // Redirect URL must match the one configured in Google Console
-	Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email"},
+	RedirectURL:  "https://b0fe-2804-14c-cc92-94de-a04e-df67-2d58-c638.ngrok-free.app/redirects",  // Redirect URL must match the one configured in Google Console
+	Scopes:       []string  { 
+                                "https://www.googleapis.com/auth/userinfo.email", 
+                                "https://www.googleapis.com/auth/youtube.download",
+                                "https://www.googleapis.com/auth/youtube.force-ssl",
+                                "https://www.googleapis.com/auth/youtubepartner",
+                            },
 	Endpoint:     google.Endpoint,
 }
 
@@ -393,7 +398,7 @@ func handleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	http.HandleFunc("/summary", handleSummaryRequest)
-    http.HandleFunc("/redirect", handleGoogleRedirect) // OAuth2 redirect endpoint
+    http.HandleFunc("/redirects", handleGoogleRedirect) // OAuth2 redirect endpoint
 	http.HandleFunc("/login", handleGoogleLogin)      // Start OAuth2 flow
 	fmt.Println("Server started at :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
