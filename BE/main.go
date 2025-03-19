@@ -349,13 +349,13 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Clean the summary string by removing the Markdown code block wrapper
-	cleanedSummary := strings.TrimPrefix(summary, "```json\n")
-	cleanedSummary = strings.TrimSuffix(cleanedSummary, "\n```")
-	cleanedSummary = strings.TrimSpace(cleanedSummary)
+	// // Clean the summary string by removing the Markdown code block wrapper
+	// cleanedSummary := strings.TrimPrefix(summary, "```json\n")
+	// cleanedSummary = strings.TrimSuffix(cleanedSummary, "\n```")
+	// cleanedSummary = strings.TrimSpace(cleanedSummary)
 
 	// Debugging: Print the cleaned summary string
-	fmt.Println("Cleaned summary string:", cleanedSummary)
+	fmt.Println("Cleaned summary string: \n\n", summary)
 
 	// Parse the cleaned summary string into a structured JSON object
 	var summaryResult struct {
@@ -363,7 +363,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		Answer  string `json:"answer"`
 		Lang    string `json:"lang"`
 	}
-	if err := json.Unmarshal([]byte(cleanedSummary), &summaryResult); err != nil {
+	if err := json.Unmarshal([]byte(summary), &summaryResult); err != nil {
 		http.Error(w, fmt.Sprintf("Error parsing summary JSON: %v", err), http.StatusInternalServerError)
 		return
 	}
