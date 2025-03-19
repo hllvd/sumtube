@@ -198,17 +198,38 @@ func summarizeText(caption string, lang string, title string) (string, error) {
 			{
 				"role":    "system",
 				"content": fmt.Sprintf(`You are a helpful assistant. 
-                    Please use the current language of the text to output the summary. 
-                    If the title of the text has a question, need to answer that question in the content and in the 'answer' property of the json. 
-                    The output would be a json file like this example: {content:"summarized text here", lang:"%s", answer:"answer here"}.
+                I would pass a title and the captions as input.
+                    I need 3 fields for output: $content, $lang and $answer. I will explain what I would expect for these fields:
+                    - $content:
+                    -- The $content would be the summarized text of the text in markdown to emphasize important things if needed. 
+                    -- Allowed markdown: bold, italic, code, link, list, and header.
+                    -- A good snippet to put as a seo description which is the first 150 words of the content.
+                    -- If more text is required, please add an extra paragraph with no more than 300 words is necessary.
+                    -- The output of this field would be $content: [summarized text here]
+                    
+                    - $lang:
+                    -- Please use the current language of the text to output the summary.
+                    -- The output of the lang would 'language:' following by the current language. 
+                    
+                    $answer: 
+                    -- This should be the answer of the title of the video if the title is a question.
+                    -- Limit this field's answer to no more than 32 words. This is important!
+                    -- If the title have no question, please put the word 'When', 'How' in the begin of the title.
+                    
+                    * I would like the output THE FIELDS separated by \n----\n file like this example:
+                    $content: This is the content
+                    ----
+                    $lang: "%s"
+                    ----
+                    $answer: This is the answer
+             
                    `, lang),
 			},
 			{
 				"role":    "user",
-				"content": fmt.Sprintf("I would like to summarize this text with title %s in %s language, into less than 200 words: %s", title, lang, caption),
+				"content": fmt.Sprintf("I would like to summarize this text with title `[when|how|how to] %s ?` in %s language, the caption is: %s", title, lang, caption),
 			},
 		},
-        "type": "json_object",
 		"stream": false,
 	}
 
@@ -327,9 +348,6 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Error summarizing caption: %v", err), http.StatusInternalServerError)
 		return
 	}
-
-	// Debugging: Print the raw summary string
-	fmt.Println("Raw summary string:", summary)
 
 	// Clean the summary string by removing the Markdown code block wrapper
 	cleanedSummary := strings.TrimPrefix(summary, "```json\n")
