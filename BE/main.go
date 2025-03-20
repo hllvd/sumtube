@@ -209,7 +209,7 @@ func summarizeText(caption string, lang string, title string) (string, error) {
                     
                     - $lang:
                     -- Please use the current language of the text to output the summary.
-                    -- The output of the lang would 'language:' following by the current language. 
+                    -- The output of the lang would 'language:' following by the current language. Don't wrap with quotes, put only the result
                     
                     $answer: 
                     -- This should be the answer of the title of the video if the title is a question.
@@ -300,6 +300,40 @@ func sanitizeSubtitle(subtitle string) string {
 	return summarizedSanitized
 }
 
+type Output struct {
+	Content string `json:"content"`
+	Lang    string `json:"lang"`
+	Answer  string `json:"answer"`
+}
+
+// Function to parse the input and convert it to JSON
+func parseInputToJSON(input string) (string, error) {
+	// Initialize the struct
+	var output Output
+
+	// Split the input by the separator
+	parts := strings.Split(input, "\n----\n")
+
+	// Iterate over each part to extract the fields
+	for _, part := range parts {
+		if strings.HasPrefix(part, "$content:") {
+			output.Content = strings.TrimSpace(strings.TrimPrefix(part, "$content:"))
+		} else if strings.HasPrefix(part, "$lang:") {
+			output.Lang = strings.TrimSpace(strings.TrimPrefix(part, "$lang:"))
+		} else if strings.HasPrefix(part, "$answer:") {
+			output.Answer = strings.TrimSpace(strings.TrimPrefix(part, "$answer:"))
+		}
+	}
+
+	// Marshal the struct into JSON
+	jsonData, err := json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		return "", err
+	}
+
+	return string(jsonData), nil
+}
+
 func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
@@ -349,24 +383,8 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// // Clean the summary string by removing the Markdown code block wrapper
-	// cleanedSummary := strings.TrimPrefix(summary, "```json\n")
-	// cleanedSummary = strings.TrimSuffix(cleanedSummary, "\n```")
-	// cleanedSummary = strings.TrimSpace(cleanedSummary)
-
 	// Debugging: Print the cleaned summary string
 	fmt.Println("Cleaned summary string: \n\n", summary)
-
-	// Parse the cleaned summary string into a structured JSON object
-	var summaryResult struct {
-		Content string `json:"content"`
-		Answer  string `json:"answer"`
-		Lang    string `json:"lang"`
-	}
-	if err := json.Unmarshal([]byte(summary), &summaryResult); err != nil {
-		http.Error(w, fmt.Sprintf("Error parsing summary JSON: %v", err), http.StatusInternalServerError)
-		return
-	}
 
 	path := convertTitleToURL(title)
 	if err := pushToDynamoDB(videoID, language, title, summary, path); err != nil {
@@ -374,13 +392,19 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return the structured JSON response
+	// Parse the summary into JSON
+	jsonParsed, err := parseInputToJSON(summary)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error parsing summary to JSON: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Set the response content type to JSON
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"content": summaryResult.Content,
-		"answer":  summaryResult.Answer,
-		"lang":    summaryResult.Lang,
-	})
+
+	// Write the JSON response
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(jsonParsed))
 }
 
 // Handle Google OAuth2 redirect
