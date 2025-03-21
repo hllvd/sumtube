@@ -1,13 +1,13 @@
 services:
   go-server:
-    build: .
+    build: ./api
     container_name: go-server
     ports:
       - "8080:8080"
     networks:
       - app-network
     env_file:
-      - .env
+      - ./api/.env
     environment:
       - PATH=/usr/local/bin:${PATH}
 
@@ -17,7 +17,7 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf # Correct path
+      - ./api/nginx/nginx.conf:/etc/nginx/conf.d/default.conf
     depends_on:
       - go-server
     networks:
