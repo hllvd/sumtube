@@ -11,15 +11,29 @@ services:
     environment:
       - PATH=/usr/local/bin:${PATH}
 
+  renderer-server:
+    build: ./renderer
+    container_name: renderer-server
+    ports:
+      - "8081:8081"
+    networks:
+      - app-network
+    env_file:
+      - ./renderer/.env
+    environment:
+      - PATH=/usr/local/bin:${PATH}
+
   nginx:
     image: nginx:latest
     container_name: nginx
     ports:
       - "80:80"
     volumes:
-      - ./api/nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./api/nginx/nginx.conf:/etc/nginx/conf.d/api.conf
+      - ./renderer/nginx/nginx.conf:/etc/nginx/conf.d/renderer.conf
     depends_on:
       - go-server
+      - renderer-server
     networks:
       - app-network
 
