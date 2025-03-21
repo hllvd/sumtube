@@ -140,7 +140,7 @@ func downloadSubtitle(videoURL string, lang string) (string, error) {
 		return "", fmt.Errorf("failed to read subtitle file: %w", err)
 	}
 
-	fmt.Println("data : ", string(data))
+	//fmt.Println("data : ", string(data))
 	return string(data), nil
 }
 
@@ -199,6 +199,7 @@ func summarizeText(caption string, lang string, title string) (string, error) {
 				"role":    "system",
 				"content": fmt.Sprintf(`You are a helpful assistant. 
                 I would pass a title and the captions as input.
+                    If the title is 'Listicle Title', please make a list with the answers along side the content.
                     I need 3 fields for output: $content, $lang and $answer. I will explain what I would expect for these fields:
                     - $content:
                     -- The $content would be the summarized text of the text in markdown to emphasize important things if needed. 
@@ -216,11 +217,11 @@ func summarizeText(caption string, lang string, title string) (string, error) {
                     -- Limit this field's answer to no more than 32 words. This is important!
                     -- If the title have no question, please put the word 'When', 'How' in the begin of the title.
                     
-                    * I would like the output THE FIELDS separated by \n----\n file like this example:
+                    * I would like the output THE FIELDS separated by \n---\n file like this example:
                     $content: This is the content
-                    ----
-                    $lang: "%s"
-                    ----
+                    ---
+                    $lang: en|pt|es|it|fr|du
+                    ---
                     $answer: This is the answer
              
                    `, lang),
@@ -312,7 +313,7 @@ func parseInputToJSON(input string) (string, error) {
 	var output Output
 
 	// Split the input by the separator
-	parts := strings.Split(input, "\n----\n")
+	parts := strings.Split(input, "\n---\n")
 
 	// Iterate over each part to extract the fields
 	for _, part := range parts {
@@ -332,6 +333,16 @@ func parseInputToJSON(input string) (string, error) {
 	}
 
 	return string(jsonData), nil
+}
+
+func validationMessageBody(summary string) bool {
+	// Use raw string (backticks) for the regex pattern
+	pattern := `^\$content:(.+?)\n---\n\$lang:(.+?)\n---\n\$answer:(.+?)$`
+	re := regexp.MustCompile(pattern)
+
+	matches := re.FindStringSubmatch(summary)
+	if (len(matches) > 0) {return true}
+    return false
 }
 
 func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
@@ -381,6 +392,12 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error summarizing caption: %v", err), http.StatusInternalServerError)
 		return
+	}
+
+    if validationMessageBody(summary) {
+		fmt.Println("Validation successful!")
+	} else {
+		fmt.Println("Validation failed!")
 	}
 
 	// Debugging: Print the cleaned summary string

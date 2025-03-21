@@ -1,0 +1,28 @@
+services:
+  go-server:
+    build: .
+    container_name: go-server
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+    env_file:
+      - .env
+    environment:
+      - PATH=/usr/local/bin:${PATH}
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf # Correct path
+    depends_on:
+      - go-server
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
