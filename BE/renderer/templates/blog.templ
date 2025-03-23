@@ -1,26 +1,32 @@
 // templates/blog.templ
 package templates
 
-templ BlogTemplate(youtubeID string) {
-  <!DOCTYPE html>
-  <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blog Post</title>
-  </head>
-  <body>
-    <h1>Welcome to the Blog!</h1>
-    <div>
-      <iframe
-        width="560"
-        height="315"
-        src={"https://www.youtube.com/embed/" + youtubeID}
-        frameborder="0"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowfullscreen>
-      </iframe>
-    </div>
-  </body>
-  </html>
+import (
+	"go-renderer-server/services"
+)
+
+// BlogTemplate renders the blog page with data from the external API.
+templ BlogTemplate(blogData *services.BlogData) {
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>{ blogData.Title }</title>
+	</head>
+	<body>
+		<h1>{ blogData.Title }</h1>
+		<p>{ blogData.Description }</p>
+		<div>
+			<iframe
+				width="560"
+				height="315"
+				src={"https://www.youtube.com/embed/" + blogData.VideoID}
+				frameborder="0"
+				allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+				allowfullscreen>
+			</iframe>
+		</div>
+	</body>
+	</html>
 }

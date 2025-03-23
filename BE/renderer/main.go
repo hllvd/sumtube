@@ -4,9 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"go-renderer-server/templates"
-
-	"github.com/a-h/templ"
+	"go-renderer-server/controllers"
 )
 
 // extractYouTubeID extracts the YouTube ID from a URL or returns the input as-is.
@@ -23,18 +21,24 @@ func extractYouTubeID(input string) string {
 }
 
 // handleBlog handles the /ID route.
-func handleBlog(w http.ResponseWriter, r *http.Request) {
-	// Extract the ID from the URL path
-	id := strings.TrimPrefix(r.URL.Path, "/")
-	youtubeID := extractYouTubeID(id)
+// func handleBlog(w http.ResponseWriter, r *http.Request) {
+// 	// Extract the ID from the URL path
+// 	id := strings.TrimPrefix(r.URL.Path, "/")
+// 	youtubeID := extractYouTubeID(id)
 
-	// Render the blog template with the YouTube ID
-	templ.Handler(templates.BlogTemplate(youtubeID)).ServeHTTP(w, r)
-}
+// 	// Render the blog template with the YouTube ID
+// 	templ.Handler(templates.BlogTemplate(youtubeID)).ServeHTTP(w, r)
+// }
 
 func main() {
 	// Serve the /ID route
-	http.HandleFunc("/", handleBlog)
+	//http.HandleFunc("/", handleBlog)
+
+	// Create a new BlogController
+	blogController := controllers.NewBlogController()
+
+	// Serve the /ID route
+	http.HandleFunc("/", blogController.HandleBlog)
 
 	// Start the server
 	println("Server is running on http://localhost:8081")
