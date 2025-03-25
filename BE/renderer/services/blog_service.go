@@ -16,7 +16,7 @@ type BlogData struct {
 }
 
 // GetBlogData calls the external API and returns the blog data.
-func GetBlogData(youtubeID string) (*BlogData, error) {
+func GetBlogData(lang string, youtubeID string) (*BlogData, error) {
 	// Replace this URL with the actual external API endpoint
 	apiURL := fmt.Sprintf("https://api.example.com/blog?videoId=%s", youtubeID)
 

@@ -21,9 +21,9 @@ case $action in
         lsof -ti :8080 | xargs -r kill -9
         lsof -ti :8081 | xargs -r kill -9
 
-        echo "Running docker-compose up -d"
+        echo "Running docker-compose up -d --build"
         # Start Docker Compose
-        docker-compose up -d
+        docker-compose up -d --build
         ;;
         
     "down")

@@ -459,6 +459,6 @@ func main() {
 	http.HandleFunc("/summary", handleSummaryRequest)
     http.HandleFunc("/redirects", handleGoogleRedirect) // OAuth2 redirect endpoint
 	http.HandleFunc("/login", handleGoogleLogin)      // Start OAuth2 flow
-	fmt.Println("Server started at :8080")
+	fmt.Println("Server started at :8080 test")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
