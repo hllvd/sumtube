@@ -7,6 +7,7 @@ import (
 	"go-renderer-server/controllers"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -70,7 +71,7 @@ func (c *LoadController) HandleLoad(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send a POST request to the Docker API server
-	resp, err := http.Post("http://go-server:8080/summary", "application/json", bytes.NewBuffer(payloadBytes))
+	resp, err := http.Post(os.Getenv("SUMTUBE_API"), "application/json", bytes.NewBuffer(payloadBytes))
 	if err != nil {
 		http.Error(w, "Failed to call Docker API server", http.StatusInternalServerError)
 		return
