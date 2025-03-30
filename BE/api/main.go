@@ -197,34 +197,35 @@ func summarizeText(caption string, lang string, title string) (string, error) {
 		"messages": []map[string]string{
 			{
 				"role":    "system",
-				"content": fmt.Sprintf(`You are a helpful assistant. 
-                I would pass a title and the captions as input.
-                    If the title is 'Listicle Title', please make a list with the answers along side the content.
-                    I need 3 fields for output: $content, $lang and $answer. I will explain what I would expect for these fields:
-                    - $content:
-                    -- The $content would be the summarized text of the text in markdown to emphasize important things if needed. 
-                    -- Allowed markdown: bold, italic, code, link, list, and header.
-                    -- A good snippet to put as a seo description which is the first 150 words of the content.
-                    -- If more text is required, please add an extra paragraph with no more than 300 words is necessary.
-                    -- The output of this field would be $content: [summarized text here]
-                    
-                    - $lang:
-                    -- Please use the current language of the text to output the summary.
-                    -- The output of the lang would 'language:' following by the current language. Don't wrap with quotes, put only the result
-                    
-                    $answer: 
-                    -- This should be the answer of the title of the video if the title is a question.
-                    -- Limit this field's answer to no more than 32 words. This is important!
-                    -- If the title have no question, please put the word 'When', 'How' in the begin of the title.
-                    
-                    * I would like the output THE FIELDS separated by \n---\n file like this example:
-                    $content: This is the content
-                    ---
-                    $lang: en|pt|es|it|fr|du
-                    ---
-                    $answer: This is the answer
-             
-                   `, lang),
+				"content": fmt.Sprintf(`You are a helpful assistant.  
+				I will provide a title, language and captions as input.  
+				
+				Your task is to generate a JSON output with three fields: $content, $lang, and $answer. Here's what each field should contain:  
+				
+				- $content:
+				  - A summarized version of the text in Markdown format.  
+				  - Use **bold**, *italic*, lists, and headers for emphasis where needed. Use \n for line breaks.  
+				  - If you need to use quotes, wrap the sentence with underscores (_like this_) instead of regular quotes.  
+				  - If more text is required, you may add an extra paragraph, but it should not exceed 300 words.  
+				  - If the title is a listicle (e.g., "Top 10 Ways to..."), format the summary as a list.
+				  - You can link the subject of the summary to its context in the video by specifying the exact timestamp. For example: "[Elon Musk](00:10:51) said that...". This will link to minute 10, second 51 of the text.
+				  - If the summary is in list format, start with a **bold subtitle**, followed by a sentence that includes a timestamp linking to the specific moment in the video. Example: "**Key Takeaways**\n\n[At 10:51](00:10:51), Elon Musk said...". Then, present the summarized points in a clear and structured list.
+				  - Keep it concise and structured without stating that it is a summary
+				
+				- $lang:
+				  - Detect and output the language code of the text.  
+				  - Example: "en", "pt", "es", "it", "fr", "de".  
+				
+				- $answer:
+				  - If the title is a question, provide a concise answer (maximum 32 words). This is important!  
+				  - If the title is not a question, rephrase it starting with "When", "How", or "How to" so that it can be answered.  
+				
+				**Final output format is a json, example:**  
+				{
+				  "$content": "Elon Musk is buying a new social media platform...",
+				  "$lang": "en",
+				  "$answer": "He is acquiring a YouTube competitor called..."
+				}`),
 			},
 			{
 				"role":    "user",
