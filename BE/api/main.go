@@ -185,6 +185,40 @@ func pushToDynamoDB(videoID string, lang string, title string, summary string, p
 	return nil
 }
 
+func parseFields(input string) (string, error) {
+    // Regex with (?s) flag to make . match newlines
+    re := regexp.MustCompile(`(?s)╔\$(.*?)╗`)
+    matches := re.FindAllStringSubmatch(input, -1)
+
+	fmt.Println("matches length", len(matches))
+	fmt.Println("FindAllStringSubmatch matches : ", matches)
+
+    result := make(map[string]string)
+
+    for _, match := range matches {
+        if len(match) < 2 {
+            continue
+        }
+        
+        fieldContent := strings.TrimSpace(match[1])
+        parts := strings.SplitN(fieldContent, ":", 2)
+        if len(parts) != 2 {
+            continue
+        }
+        
+        fieldName := strings.TrimSpace(parts[0])
+        fieldValue := strings.TrimSpace(parts[1])
+        result[fieldName] = fieldValue
+    }
+
+    jsonData, err := json.Marshal(result)
+    if err != nil {
+        return "", fmt.Errorf("error marshaling to JSON: %v", err)
+    }
+
+    return string(jsonData), nil
+}
+
 func summarizeText(caption string, lang string, title string) (string, error) {
 	apiURL := "https://api.deepseek.com/chat/completions"
 	apiKey := os.Getenv("DEEPSEEK_API_KEY")
@@ -202,7 +236,7 @@ func summarizeText(caption string, lang string, title string) (string, error) {
 				
 				Your task is to generate a JSON output with three fields: $content, $lang, and $answer. Here's what each field should contain:  
 				
-				- $content:
+				- ╔$content:
 				  - A summarized version of the text in Markdown format.  
 				  - Use **bold**, *italic*, lists, and headers for emphasis where needed. Use \n for line breaks.  
 				  - If you need to use quotes, wrap the sentence with underscores (_like this_) instead of regular quotes.  
@@ -211,20 +245,22 @@ func summarizeText(caption string, lang string, title string) (string, error) {
 				  - You can link the subject of the summary to its context in the video by specifying the exact timestamp. For example: "[Elon Musk](00:10:51) said that...". This will link to minute 10, second 51 of the text.
 				  - If the summary is in list format, start with a **bold subtitle**, followed by a sentence that includes a timestamp linking to the specific moment in the video. Example: "**Key Takeaways**\n\n[At 10:51](00:10:51), Elon Musk said...". Then, present the summarized points in a clear and structured list.
 				  - Keep it concise and structured without stating that it is a summary
+				  - When finish the content of this field, please use ╗
 				
-				- $lang:
+				- ╔$lang:
 				  - Detect and output the language code of the text.  
-				  - Example: "en", "pt", "es", "it", "fr", "de".  
+				  - Example: "en", "pt", "es", "it", "fr", "de".
+				  - When finish the content of this field, please use ╗  
 				
-				- $answer:
+				- ╔$answer:
 				  - If the title is a question, provide a concise answer (maximum 32 words). This is important!  
-				  - If the title is not a question, rephrase it starting with "When", "How", or "How to" so that it can be answered.  
+				  - If the title is not a question, rephrase it starting with "When", "How", or "How to" so that it can be answered.
+				  - When finish the content of this field, please use ╗
 				
-				**Final output format is a json, example:**  
-				{
-				  "$content": "Elon Musk is buying a new social media platform...",
-				  "$lang": "en",
-				  "$answer": "He is acquiring a YouTube competitor called..."
+				** The final expected output would be something like: ** 
+				╔$content:[Summarized text here] ╗
+				╔$lang:[lang here] ╗
+				╔$answer:[Answer here] ╗
 				}`),
 			},
 			{
@@ -302,127 +338,112 @@ func sanitizeSubtitle(subtitle string) string {
 	return summarizedSanitized
 }
 
-type Output struct {
-	Content string `json:"content"`
-	Lang    string `json:"lang"`
-	Answer  string `json:"answer"`
+type GPTResponseToJson struct {
+	Title    string `json:"title"`
+	Vid      string `json:"vid"`
+	Content  string `json:"content"`
+	Lang 	 string `json:"lang"`
+	Answer   string `json:"answer"`
+	ContentUrl string `json:"contentUrl"`
 }
 
-// Function to parse the input and convert it to JSON
-func parseInputToJSON(input string) (string, error) {
-	// Initialize the struct
-	var output Output
 
-	// Split the input by the separator
-	parts := strings.Split(input, "\n---\n")
-
-	// Iterate over each part to extract the fields
-	for _, part := range parts {
-		if strings.HasPrefix(part, "$content:") {
-			output.Content = strings.TrimSpace(strings.TrimPrefix(part, "$content:"))
-		} else if strings.HasPrefix(part, "$lang:") {
-			output.Lang = strings.TrimSpace(strings.TrimPrefix(part, "$lang:"))
-		} else if strings.HasPrefix(part, "$answer:") {
-			output.Answer = strings.TrimSpace(strings.TrimPrefix(part, "$answer:"))
-		}
-	}
-
-	// Marshal the struct into JSON
-	jsonData, err := json.MarshalIndent(output, "", "  ")
-	if err != nil {
-		return "", err
-	}
-
-	return string(jsonData), nil
-}
-
-func validationMessageBody(summary string) bool {
-	// Use raw string (backticks) for the regex pattern
-	pattern := `^\$content:(.+?)\n---\n\$lang:(.+?)\n---\n\$answer:(.+?)$`
-	re := regexp.MustCompile(pattern)
-
-	matches := re.FindStringSubmatch(summary)
-	if (len(matches) > 0) {return true}
-    return false
-}
 
 func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
-		return
-	}
+    if r.Method != http.MethodPost {
+        http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+        return
+    }
 
-	var requestBody struct {
-		VideoID string `json:"videoId"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
+    var requestBody struct {
+        VideoID string `json:"videoId"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
 
-	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", requestBody.VideoID)
+    videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", requestBody.VideoID)
 
-	videoID, err := extractVideoID(videoURL)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error extracting video ID: %v", err), http.StatusBadRequest)
-		return
-	}
+    videoID, err := extractVideoID(videoURL)
+    if err != nil {
+        http.Error(w, fmt.Sprintf("Error extracting video ID: %v", err), http.StatusBadRequest)
+        return
+    }
 
-	title, language, err := getVideoMetadata(videoURL)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error fetching video metadata: %v", err), http.StatusInternalServerError)
-		return
-	}
+    title, language, err := getVideoMetadata(videoURL)
+    if err != nil {
+        http.Error(w, fmt.Sprintf("Error fetching video metadata: %v", err), http.StatusInternalServerError)
+        return
+    }
 
-	subtitle, err := downloadSubtitle(videoURL, language)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error downloading subtitle: %v", err), http.StatusInternalServerError)
-		return
-	}
+    subtitle, err := downloadSubtitle(videoURL, language)
+    if err != nil {
+        http.Error(w, fmt.Sprintf("Error downloading subtitle: %v", err), http.StatusInternalServerError)
+        return
+    }
 
-	subtitleSanitized := sanitizeSubtitle(subtitle)
-	subtitleKey := videoID + "-caption.txt"
+    subtitleSanitized := sanitizeSubtitle(subtitle)
+    subtitleKey := videoID + "-caption.txt"
 
-	go func() {
-		if err := uploadToS3(subtitleSanitized, subtitleKey); err != nil {
-			log.Printf("Error uploading subtitle to S3: %v\n", err)
-		}
-	}()
+    go func() {
+        if err := uploadToS3(subtitleSanitized, subtitleKey); err != nil {
+            log.Printf("Error uploading subtitle to S3: %v\n", err)
+        }
+    }()
+	
 
-	summary, err := summarizeText(subtitleSanitized, language, title)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error summarizing caption: %v", err), http.StatusInternalServerError)
-		return
-	}
+    summary, err := summarizeText(subtitleSanitized, language, title)
+    if err != nil {
+        http.Error(w, fmt.Sprintf("Error summarizing caption: %v", err), http.StatusInternalServerError)
+        return
+    }
+    fmt.Printf("\n Debug summary: %+v\n", summary)
 
-    if validationMessageBody(summary) {
-		fmt.Println("Validation successful!")
-	} else {
-		fmt.Println("Validation failed!")
-	}
+    sanitizedSummary, err := parseFields(summary)
+    if err != nil {
+        http.Error(w, fmt.Sprintf("Error sanitizing summary JSON: %v", err), http.StatusInternalServerError)
+        return
+    }
 
-	// Debugging: Print the cleaned summary string
-	fmt.Println("Cleaned summary string: \n\n", summary)
+    fmt.Printf("\n Debug sanitizedSummary: %+v\n", sanitizedSummary)
 
 	path := convertTitleToURL(title)
-	if err := pushToDynamoDB(videoID, language, title, summary, path); err != nil {
+	if err := pushToDynamoDB(videoID, language, title, sanitizedSummary, path); err != nil {
 		http.Error(w, fmt.Sprintf("Error pushing to DynamoDB: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	// Parse the summary into JSON
-	jsonParsed, err := parseInputToJSON(summary)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error parsing summary to JSON: %v", err), http.StatusInternalServerError)
-		return
-	}
+    // Create a variable to hold the unmarshaled summary data
+    var summaryData map[string]string
+    if err := json.Unmarshal([]byte(sanitizedSummary), &summaryData); err != nil {
+        http.Error(w, fmt.Sprintf("Error parsing sanitized summary JSON: %v", err), http.StatusInternalServerError)
+        return
+    }
 
-	// Set the response content type to JSON
-	w.Header().Set("Content-Type", "application/json")
+    // Create the response struct with all fields
+    response := GPTResponseToJson{
+        Title:    title,
+        Vid:      videoID,
+        Content:  summaryData["content"],  // Will be mapped to "content" in JSON
+        Lang: summaryData["lang"], // Will be mapped to "lang" in JSON
+        Answer:   summaryData["answer"],
+    }
 
-	// Write the JSON response
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(jsonParsed))
+    // Print debug information
+    fmt.Printf("Debug response: %+v\n", response)
+
+    // Convert to JSON
+    jsonResponse, err := json.Marshal(response)
+    if err != nil {
+        http.Error(w, fmt.Sprintf("Error encoding JSON response: %v", err), http.StatusInternalServerError)
+        return
+    }
+
+    fmt.Printf("Debug jsonResponse: %s\n", jsonResponse)
+    
+    w.Header().Set("Content-Type", "application/json")
+    w.Write(jsonResponse)
 }
 
 // Handle Google OAuth2 redirect
