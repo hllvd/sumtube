@@ -339,12 +339,56 @@ func sanitizeSubtitle(subtitle string) string {
 }
 
 type GPTResponseToJson struct {
-	Title    string `json:"title"`
-	Vid      string `json:"vid"`
-	Content  string `json:"content"`
-	Lang 	 string `json:"lang"`
-	Answer   string `json:"answer"`
-	ContentUrl string `json:"contentUrl"`
+    Title   string `json:"title"`
+    Vid     string `json:"vid"`
+    Content string `json:"content"`
+    Lang    string `json:"lang"`
+    Answer  string `json:"answer"`
+    Path    string `json:"path"` // Adding path since it's available
+}
+
+func getFromDynamoDb(language string, videoID string) (map[string]string, error) {
+    compositeKey := fmt.Sprintf("%s#%s", videoID, language)
+    
+    result, err := dynamoDBClient.GetItem(context.Background(), &dynamodb.GetItemInput{
+        TableName: aws.String(dynamoDBTableName),
+        Key: map[string]dynamodbtypes.AttributeValue{
+            "id": &dynamodbtypes.AttributeValueMemberS{Value: compositeKey},
+        },
+    })
+    if err != nil {
+        return nil, fmt.Errorf("failed to get item from DynamoDB: %w", err)
+    }
+    
+    if result.Item == nil {
+        return nil, nil // Item not found
+    }
+    
+    dataAttr, ok := result.Item["data"].(*dynamodbtypes.AttributeValueMemberM)
+    if !ok {
+        return nil, fmt.Errorf("invalid data format in DynamoDB item")
+    }
+    
+    contentAttr, ok := dataAttr.Value["content"].(*dynamodbtypes.AttributeValueMemberS)
+    if !ok {
+        return nil, fmt.Errorf("content field missing or invalid")
+    }
+    
+    titleAttr, ok := dataAttr.Value["title"].(*dynamodbtypes.AttributeValueMemberS)
+    if !ok {
+        return nil, fmt.Errorf("title field missing or invalid")
+    }
+    
+    pathAttr, ok := dataAttr.Value["path"].(*dynamodbtypes.AttributeValueMemberS)
+    if !ok {
+        return nil, fmt.Errorf("path field missing or invalid")
+    }
+    
+    return map[string]string{
+        "content": contentAttr.Value,
+        "title":   titleAttr.Value,
+        "path":    pathAttr.Value,
+    }, nil
 }
 
 
@@ -355,8 +399,13 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+	// Parse URL query parameters
+    queryParams := r.URL.Query()
+    force := queryParams.Get("force") == "true"
+
     var requestBody struct {
         VideoID string `json:"videoId"`
+		Language string `json:"language"`
     }
     if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
         http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -369,6 +418,41 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
     if err != nil {
         http.Error(w, fmt.Sprintf("Error extracting video ID: %v", err), http.StatusBadRequest)
         return
+    }
+
+	// If force is false, try to get cached summary from DynamoDB
+    if !force {
+		type ContentData struct {
+			Content string `json:"content"`
+			Answer  string `json:"answer"`
+		}
+
+        cachedData, err := getFromDynamoDb(requestBody.Language, videoID)
+		if err == nil && cachedData != nil {
+			// Parse the JSON content from DynamoDB
+			var contentData ContentData
+			err := json.Unmarshal([]byte(cachedData["content"]), &contentData)
+			if err != nil {
+				// Handle JSON parsing error
+				http.Error(w, "Failed to parse content data", http.StatusInternalServerError)
+				return
+			}
+
+			// Create the structured response
+			response := GPTResponseToJson{
+				Title:   cachedData["title"],
+				Vid:     videoID,
+				Content: contentData.Content,
+				Lang:    requestBody.Language,
+				Answer:  contentData.Answer,
+				Path:    cachedData["path"], // Include path if needed
+			}
+
+			// Return the response as JSON
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
+			return
+		}
     }
 
     title, language, err := getVideoMetadata(videoURL)
@@ -428,6 +512,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         Content:  summaryData["content"],  // Will be mapped to "content" in JSON
         Lang: summaryData["lang"], // Will be mapped to "lang" in JSON
         Answer:   summaryData["answer"],
+		
     }
 
     // Print debug information
