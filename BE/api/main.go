@@ -455,13 +455,13 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		}
     }
 
-    title, language, err := getVideoMetadata(videoURL)
+    title, videoLanguage, err := getVideoMetadata(videoURL)
     if err != nil {
         http.Error(w, fmt.Sprintf("Error fetching video metadata: %v", err), http.StatusInternalServerError)
         return
     }
 
-    subtitle, err := downloadSubtitle(videoURL, language)
+    subtitle, err := downloadSubtitle(videoURL, videoLanguage)
     if err != nil {
         http.Error(w, fmt.Sprintf("Error downloading subtitle: %v", err), http.StatusInternalServerError)
         return
@@ -477,7 +477,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
     }()
 	
 
-    summary, err := summarizeText(subtitleSanitized, language, title)
+    summary, err := summarizeText(subtitleSanitized, requestBody.Language, title)
     if err != nil {
         http.Error(w, fmt.Sprintf("Error summarizing caption: %v", err), http.StatusInternalServerError)
         return
@@ -493,7 +493,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
     fmt.Printf("\n Debug sanitizedSummary: %+v\n", sanitizedSummary)
 
 	path := convertTitleToURL(title)
-	if err := pushToDynamoDB(videoID, language, title, sanitizedSummary, path); err != nil {
+	if err := pushToDynamoDB(videoID, requestBody.Language, title, sanitizedSummary, path); err != nil {
 		http.Error(w, fmt.Sprintf("Error pushing to DynamoDB: %v", err), http.StatusInternalServerError)
 		return
 	}

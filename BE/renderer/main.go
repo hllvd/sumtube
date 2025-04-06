@@ -7,32 +7,11 @@ import (
 	"go-renderer-server/controllers"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"regexp"
 	"strings"
 )
-
-// extractYouTubeID extracts the YouTube ID from a URL or returns the input as-is.
-func extractYouTubeID(input string) string {
-	if strings.Contains(input, "v=") {
-		// Extract the ID from a full YouTube URL
-		parts := strings.Split(input, "v=")
-		if len(parts) > 1 {
-			return strings.Split(parts[1], "&")[0]
-		}
-	}
-	// Assume the input is already a YouTube ID
-	return input
-}
-
-// handleBlog handles the /ID route.
-// func handleBlog(w http.ResponseWriter, r *http.Request) {
-// 	// Extract the ID from the URL path
-// 	id := strings.TrimPrefix(r.URL.Path, "/")
-// 	youtubeID := extractYouTubeID(id)
-
-// 	// Render the blog template with the YouTube ID
-// 	templ.Handler(templates.BlogTemplate(youtubeID)).ServeHTTP(w, r)
-// }
 
 // LoadController handles YouTube-related requests
 type LoadController struct{}
@@ -41,65 +20,156 @@ func NewLoadController() *LoadController {
 	return &LoadController{}
 }
 
+var allowedLanguages = map[string]bool{
+	"en": true,
+	"pt": true,
+	"es": true,
+	"it": true,
+	"fr": true,
+	"de": true,
+}
+
+func langHandle(w http.ResponseWriter, r *http.Request) string {
+	// 1. Highest priority: Check URL path (domain.com/{lang})
+	pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(pathParts) > 0 {
+		if lang := pathParts[0]; allowedLanguages[lang] {
+			return lang
+		}
+	}
+
+	// 2. Check language cookie
+	if cookie, err := r.Cookie("language"); err == nil {
+		if allowedLanguages[cookie.Value] {
+			return cookie.Value
+		}
+	}
+
+	// 3. Check browser Accept-Language header
+	acceptLang := r.Header.Get("Accept-Language")
+	if acceptLang != "" {
+		// Parse the first language in the header (e.g., "en-US,en;q=0.9" -> "en")
+		if lang := strings.Split(acceptLang, ",")[0]; lang != "" {
+			// Extract base language code (en-US -> en)
+			baseLang := strings.Split(lang, "-")[0]
+			if allowedLanguages[baseLang] {
+				return baseLang
+			}
+		}
+	}
+
+	// 4. Default to English
+	return "en"
+}
+
+
+func extractVideoId(path string) (string, bool) {
+	var (
+		videoIDRegex = regexp.MustCompile(`^[a-zA-Z0-9\-_]{11}$`)
+		youtubeRegex = regexp.MustCompile(`(?i)(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/|youtube\.com/v/|www\.youtube\.com/watch\?v=)([a-zA-Z0-9\-_]{11})`)
+	)
+	// URL decode the path first
+	decodedPath, err := url.PathUnescape(strings.Trim(path, "/"))
+	if err != nil {
+		decodedPath = strings.Trim(path, "/")
+	}
+
+	// First try to extract from YouTube URLs
+	if match := youtubeRegex.FindStringSubmatch(decodedPath); len(match) > 1 {
+		if videoIDRegex.MatchString(match[1]) {
+			return match[1], true
+		}
+	}
+
+	// Handle non-URL paths
+	parts := strings.Split(decodedPath, "/")
+	for _, part := range parts {
+		// Direct video ID
+		if len(part) == 11 && videoIDRegex.MatchString(part) {
+			return part, true
+		}
+
+		// Video title with ID suffix
+		if len(part) > 12 && strings.Contains(part, "-") {
+			splitPart := strings.Split(part, "-")
+			lastSegment := splitPart[len(splitPart)-1]
+			if len(lastSegment) == 11 && videoIDRegex.MatchString(lastSegment) {
+				return lastSegment, true
+			}
+		}
+	}
+
+	return "", false
+}
+
 
 func (c *LoadController) HandleLoad(w http.ResponseWriter, r *http.Request) {
-	println("HandleLoad")
-	// Extract the YouTube ID or URL from the path
-	path := strings.TrimPrefix(r.URL.Path, "/")
+    println("HandleLoad")
+	path := r.URL.Path
+    
+	// Extract user's lang
+	language := langHandle(w, r)
 
-	var videoID string
+	videoID, isVideoID := extractVideoId(path)
+    if !isVideoID {
+        http.Error(w, "Invalid YouTube ID", http.StatusBadRequest)
+        return
+    }
 
-	// Handle YouTube ID or URL
-	if strings.HasPrefix(path, "https://www.youtube.com/watch?v=") {
-		// Extract the YouTube ID from the full URL
-		videoID = strings.TrimPrefix(path, "https://www.youtube.com/watch?v=")
-	} else {
-		// Assume it's just the YouTube ID
-		videoID = path
-	}
-
-	// Prepare the payload to send to the Docker API server
-	payload := map[string]string{
-		"videoId": videoID,
-	}
-
-	// Convert the payload to JSON
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		http.Error(w, "Failed to encode payload", http.StatusInternalServerError)
-		return
-	}
-
-	// Send a POST request to the Docker API server
-	resp, err := http.Post(os.Getenv("SUMTUBE_API"), "application/json", bytes.NewBuffer(payloadBytes))
-	if err != nil {
-		http.Error(w, "Failed to call Docker API server", http.StatusInternalServerError)
-		return
-	}
-	defer resp.Body.Close()
-
-	// Read the response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		http.Error(w, "Failed to read Docker API response", http.StatusInternalServerError)
-		return
-	}
-
-	// Parse the JSON response
-	var result map[string]interface{}
-	if err := json.Unmarshal(body, &result); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to parse Docker API response: %s", body), http.StatusInternalServerError)
-		return
-	}
-
-	// Extract properties from the response
-	lang := result["lang"].(string)
-	content := result["content"].(string)
-	answer := result["answer"].(string)
-
-	// Respond with the extracted data
-	response := fmt.Sprintf("Handling YouTube ID: %s\nLang: %s\nContent: %s\nAnswer: %s", videoID, lang, content, answer)
-	w.Write([]byte(response))
+	println("HandleLoad videoID: ", videoID)
+	println("HandleLoad language: ", language)
+	
+    // Prepare the payload to send to the Docker API server
+    payload := map[string]string{
+        "videoId":  videoID,
+        "language": language,
+    }
+    
+    // Convert the payload to JSON
+    payloadBytes, err := json.Marshal(payload)
+    if err != nil {
+        http.Error(w, "Failed to encode payload", http.StatusInternalServerError)
+        return
+    }
+    
+    // Send a POST request to the Docker API server
+    resp, err := http.Post(os.Getenv("SUMTUBE_API"), "application/json", bytes.NewBuffer(payloadBytes))
+    if err != nil {
+        http.Error(w, "Failed to call Docker API server", http.StatusInternalServerError)
+        return
+    }
+    defer resp.Body.Close()
+    
+    // Read the response body
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        http.Error(w, "Failed to read Docker API response", http.StatusInternalServerError)
+        return
+    }
+    
+    // Parse the JSON response
+    var result map[string]interface{}
+    if err := json.Unmarshal(body, &result); err != nil {
+        http.Error(w, fmt.Sprintf("Failed to parse Docker API response: %s", body), http.StatusInternalServerError)
+        return
+    }
+    
+    // Extract properties from the response
+    responseLang := result["lang"].(string)
+    content := result["content"].(string)
+    answer := result["answer"].(string)
+    
+    // Create structured JSON response
+    response := map[string]interface{}{
+        "videoId": videoID,
+        "lang":    responseLang,
+        "content": content,
+        "answer":  answer,
+    }
+    
+    // Send JSON response
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(response)
 }
 
 // Router function to delegate requests to the appropriate controller
@@ -115,16 +185,9 @@ func router(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Define valid language codes
-	validLangCodes := map[string]bool{
-		"es": true,
-		"pt": true,
-		"en": true,
-	}
-
 	// Check if the first segment is a valid language code
 	firstSegment := segments[0]
-	if !validLangCodes[firstSegment] {
+	if !allowedLanguages[firstSegment] {
 		println("If the first segment is not a language code, assume it's a YouTube ID or URL")
 		// If the first segment is not a language code, assume it's a YouTube ID or URL
 		loadController := NewLoadController()
