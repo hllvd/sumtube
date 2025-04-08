@@ -84,18 +84,26 @@ func extractVideoId(path string) (string, bool) {
 	// Handle non-URL paths
 	parts := strings.Split(decodedPath, "/")
 	for _, part := range parts {
-		// Direct video ID
+		// Direct video ID (standalone or at the end of path)
 		if len(part) == 11 && videoIDRegex.MatchString(part) {
 			return part, true
 		}
 
-		// Video title with ID suffix
+		// Video title with ID suffix (title-{videoId})
 		if len(part) > 12 && strings.Contains(part, "-") {
 			splitPart := strings.Split(part, "-")
 			lastSegment := splitPart[len(splitPart)-1]
 			if len(lastSegment) == 11 && videoIDRegex.MatchString(lastSegment) {
 				return lastSegment, true
 			}
+		}
+	}
+
+	// New case: Check if the last segment is a video ID in a path like /lang/title/videoId
+	if len(parts) >= 3 {
+		lastSegment := parts[len(parts)-1]
+		if len(lastSegment) == 11 && videoIDRegex.MatchString(lastSegment) {
+			return lastSegment, true
 		}
 	}
 
@@ -187,6 +195,9 @@ func router(w http.ResponseWriter, r *http.Request) {
 
 	// Check if the first segment is a valid language code
 	firstSegment := segments[0]
+
+	println("allowedLanguages[firstSegment]:", allowedLanguages[firstSegment])
+	
 	if !allowedLanguages[firstSegment] {
 		println("If the first segment is not a language code, assume it's a YouTube ID or URL")
 		// If the first segment is not a language code, assume it's a YouTube ID or URL
