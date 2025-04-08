@@ -1,0 +1,13 @@
+## Read me
+
+- Loading template:
+  -- domain.com`/{vid}`
+  -- domain.com`/https://www.youtube.com/watch?v={vid}`
+  -- domain.com`/pt/{vid}`
+  -- domain.com`/pt/https://www.youtube.com/watch?v={vid}`
+
+- Main template
+  -- domain.com`
+
+- Blog template
+  -- domain.com`/pt/{title}/{vid}`
