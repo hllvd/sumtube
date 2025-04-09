@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"go-renderer-server/controllers"
 	"io"
 	"net/http"
 	"net/url"
@@ -29,14 +28,34 @@ var allowedLanguages = map[string]bool{
 	"de": true,
 }
 
-func langHandle(w http.ResponseWriter, r *http.Request) string {
-	// 1. Highest priority: Check URL path (domain.com/{lang})
-	pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+func extractLang(path string) (string, bool) {
+	pathParts := strings.Split(strings.Trim(path, "/"), "/")
 	if len(pathParts) > 0 {
 		if lang := pathParts[0]; allowedLanguages[lang] {
-			return lang
+			return lang,true
 		}
 	}
+	return "",false
+}
+
+func langHandle(w http.ResponseWriter, r *http.Request) string {
+	// 1. Highest priority: Check URL path (domain.com/{lang})
+	lang, isOnPath := extractLang(r.URL.Path)
+	if isOnPath {
+		// Set language cookie
+        cookie := &http.Cookie{
+            Name:     "language",
+            Value:    lang,
+            Path:     "/",
+            MaxAge:   86400 * 365, // 1 year
+            Secure:   true,        // Only send over HTTPS
+            HttpOnly: true,        // Prevent JavaScript access
+            SameSite: http.SameSiteStrictMode,
+        }
+        http.SetCookie(w, cookie)
+		return lang
+	}
+
 
 	// 2. Check language cookie
 	if cookie, err := r.Cookie("language"); err == nil {
@@ -240,42 +259,82 @@ func (c *LoadController) HandleLoad(w http.ResponseWriter, r *http.Request) {
 
 // Router function to delegate requests to the appropriate controller
 func router(w http.ResponseWriter, r *http.Request) {
-	println("Entering into router")
+    path := r.URL.Path
+    
+    // Extract components
+    lang, langOk := extractLang(path)
+    title, titleOk := extractTitle(path)
+    videoId, videoOk := extractVideoId(path)
+
+	langHandled := langHandle(w, r)
+
+    // Route based on extracted components
+    switch {
+
+	// Case 1: If lang does not exist please check the value from langHandled and redirect the user to
+	// domain.com/{lang}/the current path already introduced by the user
+    case !langOk:
+        // Build the new URL with the language prefix
+        newPath := fmt.Sprintf("/%s%s", langHandled, path)
+        
+        // Create the redirect URL, preserving any query parameters
+        redirectURL := &url.URL{
+            Path:     newPath,
+            RawQuery: r.URL.RawQuery,
+        }
+        
+        // Perform the redirect
+        http.Redirect(w, r, redirectURL.String(), http.StatusMovedPermanently)
+        return
 	
-	path := strings.TrimPrefix(r.URL.Path, "/")
-
-	// Split the path into segments
-	segments := strings.Split(path, "/")
-	if len(segments) == 0 {
-		http.Error(w, "Invalid URL", http.StatusNotFound)
-		return
-	}
-
-	// Check if the first segment is a valid language code
-	firstSegment := segments[0]
-
-	println("allowedLanguages[firstSegment]:", allowedLanguages[firstSegment])
-	
-	if !allowedLanguages[firstSegment] {
-		println("If the first segment is not a language code, assume it's a YouTube ID or URL")
-		// If the first segment is not a language code, assume it's a YouTube ID or URL
-		loadController := NewLoadController()
-		loadController.HandleLoad(w, r)
-		return
-	}
-
-	// If the first segment is a language code, check if the path contains "~"
-	if strings.Contains(path, "~") {
-		println("Delegate to the BlogController")
-		// Delegate to the BlogController
-		blogController := controllers.NewBlogController()
-		blogController.HandleBlog(w, r)
-		return
-	}
-
-	// Handle invalid or unknown paths
-	http.Error(w, "Invalid URL", http.StatusNotFound)
+	// Case 2: Only language exists - load index
+    case langOk && !titleOk && !videoOk:
+        loadIndex(w, r, lang)
+        
+    // Case 3: Language, title, and video ID exist - load blog
+    case langOk && titleOk && videoOk:
+        loadBlog(w, r, lang, title, videoId)
+        
+    // Case 4: Only language and video ID exist or only videoId exist - load summary
+    case videoOk && !titleOk:
+        loadSummary(w, r, videoId)
+        
+    // Default case: Invalid route
+    default:
+        http.Error(w, "Invalid route", http.StatusNotFound)
+    }
 }
+
+// Example URL: /en
+func loadIndex(w http.ResponseWriter, r *http.Request, lang string) {
+    w.Header().Set("Content-Type", "text/plain")
+    fmt.Fprintf(w, "Loading Index Page\n")
+    fmt.Fprintf(w, "Language: %s\n", lang)
+    fmt.Fprintf(w, "URL Path: %s\n", r.URL.Path)
+}
+
+// loadBlog handles the blog page
+// Example URL: /en/my-video-title/dQw4w9WgXcQ
+func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId string) {
+    w.Header().Set("Content-Type", "text/plain")
+    fmt.Fprintf(w, "Loading Blog Page\n")
+    fmt.Fprintf(w, "Language: %s\n", lang)
+    fmt.Fprintf(w, "Title: %s\n", title)
+    fmt.Fprintf(w, "Video ID: %s\n", videoId)
+    fmt.Fprintf(w, "URL Path: %s\n", r.URL.Path)
+}
+
+// loadSummy handles the summary page
+// Example URL: /en/dQw4w9WgXcQ
+func loadSummary(w http.ResponseWriter, r *http.Request, videoId string) {
+    lang := langHandle(w, r)
+	w.Header().Set("Content-Type", "text/plain")
+    fmt.Fprintf(w, "Loading Summary Page\n")
+    fmt.Fprintf(w, "Language: %s\n", lang)
+    fmt.Fprintf(w, "Video ID: %s\n", videoId)
+    fmt.Fprintf(w, "URL Path: %s\n", r.URL.Path)
+}
+
 
 func main() {
 	// // Serve the /ID route
