@@ -110,6 +110,64 @@ func extractVideoId(path string) (string, bool) {
 	return "", false
 }
 
+func extractTitle(path string) (string, bool) {
+	var (
+		youtubeRegex = regexp.MustCompile(`(?i)(youtube\.com/watch|youtu\.be|youtube\.com/embed|youtube\.com/v|www\.youtube\.com/watch)`)
+		videoIDRegex = regexp.MustCompile(`^[a-zA-Z0-9\-_]{11}$`)
+	)
+		// URL decode the path first
+		decodedPath, err := url.PathUnescape(strings.Trim(path, "/"))
+		if err != nil {
+			decodedPath = strings.Trim(path, "/")
+		}
+	
+		// Check if this is any YouTube URL pattern
+		if youtubeRegex.MatchString(decodedPath) {
+			return "", false
+		}
+	
+		parts := strings.Split(decodedPath, "/")
+	
+		// Case 1: /{lang}/{title}-{videoId}
+		if len(parts) == 2 && strings.Contains(parts[1], "-") {
+			subparts := strings.Split(parts[1], "-")
+			// Check if last segment is a video ID
+			if len(subparts) > 1 && videoIDRegex.MatchString(subparts[len(subparts)-1]) {
+				return strings.Join(subparts[:len(subparts)-1], "-"), true
+			}
+			return parts[1], true
+		}
+	
+		// Case 2: /{lang}/{title}/{videoId}
+		if len(parts) >= 3 {
+			title := parts[len(parts)-2]
+			if title == "" {
+				return "", false
+			}
+			return title, true
+		}
+	
+		// Case 3: /{lang}/{title} (no video ID)
+		if len(parts) == 2 {
+			// Check if the second part is actually a video ID
+			if videoIDRegex.MatchString(parts[1]) {
+				return "", false
+			}
+			return parts[1], true
+		}
+	
+		// Case 4: /{title}-{videoId} (no language)
+		if len(parts) == 1 && strings.Contains(parts[0], "-") {
+			subparts := strings.Split(parts[0], "-")
+			// Check if last segment is a video ID
+			if len(subparts) > 1 && videoIDRegex.MatchString(subparts[len(subparts)-1]) {
+				return strings.Join(subparts[:len(subparts)-1], "-"), true
+			}
+			return parts[0], true
+		}
+	
+		return "", false
+	}
 
 func (c *LoadController) HandleLoad(w http.ResponseWriter, r *http.Request) {
     println("HandleLoad")
