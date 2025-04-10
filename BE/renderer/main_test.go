@@ -34,6 +34,8 @@ func TestExtractVideoId(t *testing.T) {
         {"YouTube Short URL", "youtu.be/dQw4w9WgXcQ", "dQw4w9WgXcQ", true},
         {"YouTube Embed URL", "youtube.com/embed/dQw4w9WgXcQ", "dQw4w9WgXcQ", true},
 
+        {"YouTube Url with lang", "en%2Fhttps%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DdQw4w9WgXc3", "dQw4w9WgXc3", true},
+
         // Invalid cases
         {"Invalid Input", "invalid", "", false},
         {"Missing Video ID in Title", "en/my-video-title", "", false},
@@ -105,3 +107,62 @@ func TestExtractTitle(t *testing.T) {
         })
     }
 }
+
+func TestExtractYouTubeIFromYoutubeUrl(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		wantID   string
+		wantFound bool
+	}{
+		{
+			name:     "Standard watch URL",
+			input:    "https://www.youtube.com/watch?v=ZQY_RsXmpzU",
+			wantID:   "ZQY_RsXmpzU",
+			wantFound: true,
+		},
+		{
+			name:     "Short URL",
+			input:    "https://youtu.be/AnLTl5fQWV0?si=qm51HmyWoqPsnaX6",
+			wantID:   "AnLTl5fQWV0",
+			wantFound: true,
+		},
+		{
+			name:     "URL-encoded embed",
+			input:    "youtube.com%2Fembed%2FdQw4w9WgXcQ",
+			wantID:   "dQw4w9WgXcQ",
+			wantFound: true,
+		},
+		{
+			name:     "Direct ID",
+			input:    "dQw4w9WgXcQ",
+			wantID:   "dQw4w9WgXcQ",
+			wantFound: true,
+		},
+		{
+			name:     "Invalid URL",
+			input:    "invalid.url",
+			wantID:   "",
+			wantFound: false,
+		},
+		{
+			name:     "Empty string",
+			input:    "",
+			wantID:   "",
+			wantFound: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotID, gotFound := extractYouTubeIFromYoutubeUrl(tt.input)
+			if gotID != tt.wantID {
+				t.Errorf("extractYouTubeIFromYoutubeUrl() gotID = %v, want %v", gotID, tt.wantID)
+			}
+			if gotFound != tt.wantFound {
+				t.Errorf("extractYouTubeIFromYoutubeUrl() gotFound = %v, want %v", gotFound, tt.wantFound)
+			}
+		})
+	}
+}
+

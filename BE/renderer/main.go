@@ -129,19 +129,54 @@ func extractVideoId(path string) (string, bool) {
 	return "", false
 }
 
+// ExtractYouTubeID extracts the YouTube video ID from a URL string
+func extractYouTubeIFromYoutubeUrl(rawURL string) (string, bool) {
+	// Handle URL-encoded strings
+	decodedURL, err := url.QueryUnescape(rawURL)
+	if err != nil {
+		decodedURL = rawURL
+	}
+
+	// YouTube video ID pattern (11 characters of letters, numbers, underscores, or hyphens)
+	idPattern := `^[A-Za-z0-9_-]{11}$`
+
+	// First check if it's a direct ID (standalone 11 chars in YouTube format)
+	if matched, _ := regexp.MatchString(idPattern, decodedURL); matched {
+		return decodedURL, true
+	}
+
+	// Regular expression patterns to match YouTube URLs
+	patterns := []string{
+		`(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([A-Za-z0-9_-]{11})`, // Standard URLs
+	}
+
+	for _, pattern := range patterns {
+		re := regexp.MustCompile(pattern)
+		matches := re.FindStringSubmatch(decodedURL)
+		if len(matches) > 1 {
+			return matches[1], true
+		}
+	}
+
+	return "", false
+}
+
 func extractTitle(path string) (string, bool) {
 	var (
 		youtubeRegex = regexp.MustCompile(`(?i)(youtube\.com/watch|youtu\.be|youtube\.com/embed|youtube\.com/v|www\.youtube\.com/watch)`)
 		videoIDRegex = regexp.MustCompile(`^[a-zA-Z0-9\-_]{11}$`)
 	)
+		println("here")
 		// URL decode the path first
 		decodedPath, err := url.PathUnescape(strings.Trim(path, "/"))
 		if err != nil {
 			decodedPath = strings.Trim(path, "/")
+			println("here1")
 		}
 	
 		// Check if this is any YouTube URL pattern
 		if youtubeRegex.MatchString(decodedPath) {
+			println("here2")
 			return "", false
 		}
 	
@@ -289,6 +324,7 @@ func router(w http.ResponseWriter, r *http.Request) {
 	
 	// Case 2: Only language exists - load index
     case langOk && !titleOk && !videoOk:
+		println("Case 2: Only language exists - load index :",videoOk, videoId)
         loadIndex(w, r, lang)
         
     // Case 3: Language, title, and video ID exist - load blog
