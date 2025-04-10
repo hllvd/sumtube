@@ -83,51 +83,66 @@ func langHandle(w http.ResponseWriter, r *http.Request) string {
 
 
 func extractVideoId(path string) (string, bool) {
-	var (
-		videoIDRegex = regexp.MustCompile(`^[a-zA-Z0-9\-_]{11}$`)
-		youtubeRegex = regexp.MustCompile(`(?i)(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/|youtube\.com/v/|www\.youtube\.com/watch\?v=)([a-zA-Z0-9\-_]{11})`)
-	)
-	// URL decode the path first
-	decodedPath, err := url.PathUnescape(strings.Trim(path, "/"))
-	if err != nil {
-		decodedPath = strings.Trim(path, "/")
-	}
+    var (
+        videoIDRegex = regexp.MustCompile(`^[a-zA-Z0-9\-_]{11}$`)
+        youtubeRegex = regexp.MustCompile(`(?i)(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/|youtube\.com/v/|www\.youtube\.com/watch\?v=)([a-zA-Z0-9\-_]{11})`)
+    )
 
-	// First try to extract from YouTube URLs
-	if match := youtubeRegex.FindStringSubmatch(decodedPath); len(match) > 1 {
-		if videoIDRegex.MatchString(match[1]) {
-			return match[1], true
-		}
-	}
+    // Parse the URL to handle both path and query parameters
+    parsedURL, err := url.Parse(path)
+    if err != nil {
+        return "", false
+    }
 
-	// Handle non-URL paths
-	parts := strings.Split(decodedPath, "/")
-	for _, part := range parts {
-		// Direct video ID (standalone or at the end of path)
-		if len(part) == 11 && videoIDRegex.MatchString(part) {
-			return part, true
-		}
+	println("decodedPathWithParameters",path)
 
-		// Video title with ID suffix (title-{videoId})
-		if len(part) > 12 && strings.Contains(part, "-") {
-			splitPart := strings.Split(part, "-")
-			lastSegment := splitPart[len(splitPart)-1]
-			if len(lastSegment) == 11 && videoIDRegex.MatchString(lastSegment) {
-				return lastSegment, true
-			}
-		}
-	}
+    // Combine path and query parameters for full URL handling
+    decodedPathWithParameters := parsedURL.Path
+    if parsedURL.RawQuery != "" {
+        decodedPathWithParameters += "?" + parsedURL.RawQuery
+    }
+	
+    // URL decode the combined path and parameters
+    decodedPathWithParameters, err = url.PathUnescape(strings.Trim(decodedPathWithParameters, "/"))
+    if err != nil {
+        decodedPathWithParameters = strings.Trim(path, "/")
+    }
 
-	// New case: Check if the last segment is a video ID in a path like /lang/title/videoId
-	if len(parts) >= 3 {
-		lastSegment := parts[len(parts)-1]
-		if len(lastSegment) == 11 && videoIDRegex.MatchString(lastSegment) {
-			return lastSegment, true
-		}
-	}
+    // First try to extract from YouTube URLs
+    if match := youtubeRegex.FindStringSubmatch(decodedPathWithParameters); len(match) > 1 {
+        if videoIDRegex.MatchString(match[1]) {
+            return match[1], true
+        }
+    }
 
-	return "", false
+    // Handle non-URL paths
+    parts := strings.Split(decodedPathWithParameters, "/")
+    for _, part := range parts {
+        // Direct video ID (standalone or at the end of path)
+        if len(part) == 11 && videoIDRegex.MatchString(part) {
+            return part, true
+        }
+        // Video title with ID suffix (title-{videoId})
+        if len(part) > 12 && strings.Contains(part, "-") {
+            splitPart := strings.Split(part, "-")
+            lastSegment := splitPart[len(splitPart)-1]
+            if len(lastSegment) == 11 && videoIDRegex.MatchString(lastSegment) {
+                return lastSegment, true
+            }
+        }
+    }
+
+    // Check if the last segment is a video ID in a path like /lang/title/videoId
+    if len(parts) >= 3 {
+        lastSegment := parts[len(parts)-1]
+        if len(lastSegment) == 11 && videoIDRegex.MatchString(lastSegment) {
+            return lastSegment, true
+        }
+    }
+
+    return "", false
 }
+
 
 // ExtractYouTubeID extracts the YouTube video ID from a URL string
 func extractYouTubeIFromYoutubeUrl(rawURL string) (string, bool) {
@@ -166,17 +181,14 @@ func extractTitle(path string) (string, bool) {
 		youtubeRegex = regexp.MustCompile(`(?i)(youtube\.com/watch|youtu\.be|youtube\.com/embed|youtube\.com/v|www\.youtube\.com/watch)`)
 		videoIDRegex = regexp.MustCompile(`^[a-zA-Z0-9\-_]{11}$`)
 	)
-		println("here")
 		// URL decode the path first
 		decodedPath, err := url.PathUnescape(strings.Trim(path, "/"))
 		if err != nil {
 			decodedPath = strings.Trim(path, "/")
-			println("here1")
 		}
 	
 		// Check if this is any YouTube URL pattern
 		if youtubeRegex.MatchString(decodedPath) {
-			println("here2")
 			return "", false
 		}
 	
@@ -294,12 +306,15 @@ func (c *LoadController) HandleLoad(w http.ResponseWriter, r *http.Request) {
 
 // Router function to delegate requests to the appropriate controller
 func router(w http.ResponseWriter, r *http.Request) {
-    path := r.URL.Path
+    pathWithParam := r.URL.Path
+    if r.URL.RawQuery != "" {
+        pathWithParam += "?" + r.URL.RawQuery
+    }
     
     // Extract components
-    lang, langOk := extractLang(path)
-    title, titleOk := extractTitle(path)
-    videoId, videoOk := extractVideoId(path)
+    lang, langOk := extractLang(pathWithParam)
+    title, titleOk := extractTitle(pathWithParam)
+    videoId, videoOk := extractVideoId(pathWithParam)
 
 	langHandled := langHandle(w, r)
 
@@ -310,7 +325,7 @@ func router(w http.ResponseWriter, r *http.Request) {
 	// domain.com/{lang}/the current path already introduced by the user
     case !langOk:
         // Build the new URL with the language prefix
-        newPath := fmt.Sprintf("/%s%s", langHandled, path)
+        newPath := fmt.Sprintf("/%s%s", langHandled, pathWithParam)
         
         // Create the redirect URL, preserving any query parameters
         redirectURL := &url.URL{
