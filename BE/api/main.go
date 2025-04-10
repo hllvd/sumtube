@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -158,6 +159,29 @@ func uploadToS3(content string, key string) error {
 	}
 	fmt.Println("Subtitle uploaded to S3 successfully.")
 	return nil
+}
+
+func fetchS3(key string) (string, error) {
+    fmt.Println("Fetching content from S3...")
+    
+    // Get the object from S3
+    output, err := s3Client.GetObject(context.Background(), &s3.GetObjectInput{
+        Bucket: aws.String(bucketName),
+        Key:    aws.String(key),
+    })
+    if err != nil {
+        return "", fmt.Errorf("failed to fetch from S3: %w", err)
+    }
+    defer output.Body.Close()
+
+    // Read the content from the response body
+    content, err := io.ReadAll(output.Body)
+    if err != nil {
+        return "", fmt.Errorf("failed to read S3 content: %w", err)
+    }
+
+    fmt.Println("Content fetched from S3 successfully.")
+    return string(content), nil
 }
 
 func pushToDynamoDB(videoID string, lang string, title string, summary string, path string) error {
@@ -455,28 +479,32 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		}
     }
 
-    title, videoLanguage, err := getVideoMetadata(videoURL)
-    if err != nil {
-        http.Error(w, fmt.Sprintf("Error fetching video metadata: %v", err), http.StatusInternalServerError)
+    title, videoLanguage, videoMetadataErr := getVideoMetadata(videoURL)
+    if videoMetadataErr != nil {
+        http.Error(w, fmt.Sprintf("Error fetching video metadata: %v", videoMetadataErr), http.StatusInternalServerError)
         return
     }
 
-    subtitle, err := downloadSubtitle(videoURL, videoLanguage)
-    if err != nil {
-        http.Error(w, fmt.Sprintf("Error downloading subtitle: %v", err), http.StatusInternalServerError)
-        return
-    }
+	subtitleKey := videoID + "-caption.txt"
+	subtitleSanitized, s3Err := fetchS3(subtitleKey) 
+	println("subtitleSanitized: ", subtitleSanitized)
+	println("s3Err: ", s3Err)
+	if subtitleSanitized == "" {
+		subtitle, err := downloadSubtitle(videoURL, videoLanguage)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Error downloading subtitle: %v", err), http.StatusInternalServerError)
+			return
+		}
 
-    subtitleSanitized := sanitizeSubtitle(subtitle)
-    subtitleKey := videoID + "-caption.txt"
-
-    go func() {
-        if err := uploadToS3(subtitleSanitized, subtitleKey); err != nil {
-            log.Printf("Error uploading subtitle to S3: %v\n", err)
-        }
-    }()
+		subtitleSanitized = sanitizeSubtitle(subtitle)
+		
+		go func() {
+			if err := uploadToS3(subtitleSanitized, subtitleKey); err != nil {
+				log.Printf("Error uploading subtitle to S3: %v\n", err)
+			}
+		}()
+	}
 	
-
     summary, err := summarizeText(subtitleSanitized, requestBody.Language, title)
     if err != nil {
         http.Error(w, fmt.Sprintf("Error summarizing caption: %v", err), http.StatusInternalServerError)
@@ -512,7 +540,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         Content:  summaryData["content"],  // Will be mapped to "content" in JSON
         Lang: summaryData["lang"], // Will be mapped to "lang" in JSON
         Answer:   summaryData["answer"],
-		
+		Path: path,
     }
 
     // Print debug information
