@@ -2,15 +2,21 @@ package main
 
 import (
 	"bytes"
+	"embed"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
+
+//go:embed templates/*
+var templateFS embed.FS
 
 // LoadController handles YouTube-related requests
 type LoadController struct{}
@@ -306,10 +312,11 @@ func (c *LoadController) HandleLoad(w http.ResponseWriter, r *http.Request) {
 
 // Router function to delegate requests to the appropriate controller
 func router(w http.ResponseWriter, r *http.Request) {
-    pathWithParam := r.URL.Path
+    pathWithParam := strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "https://"), "http://")
     if r.URL.RawQuery != "" {
         pathWithParam += "?" + r.URL.RawQuery
     }
+	pathWithParamHasYoutube := strings.Contains(pathWithParam, "https://")
     
     // Extract components
     lang, langOk := extractLang(pathWithParam)
@@ -318,8 +325,26 @@ func router(w http.ResponseWriter, r *http.Request) {
 
 	langHandled := langHandle(w, r)
 
+
+	println("pathWithParamHasYoutube : ", pathWithParamHasYoutube)
+
+
     // Route based on extracted components
     switch {
+
+	case pathWithParamHasYoutube:
+		// Build the new URL with the language prefix
+        newPath := fmt.Sprintf("/%s%s", langHandled, videoId)
+        
+        // Create the redirect URL, preserving any query parameters
+        redirectURL := &url.URL{
+            Path:     newPath,
+            RawQuery: r.URL.RawQuery,
+        }
+        
+        // Perform the redirect
+        http.Redirect(w, r, redirectURL.String(), http.StatusMovedPermanently)
+		return
 
 	// Case 1: If lang does not exist please check the value from langHandled and redirect the user to
 	// domain.com/{lang}/the current path already introduced by the user
@@ -336,6 +361,8 @@ func router(w http.ResponseWriter, r *http.Request) {
         // Perform the redirect
         http.Redirect(w, r, redirectURL.String(), http.StatusMovedPermanently)
         return
+	
+
 	
 	// Case 2: Only language exists - load index
     case langOk && !titleOk && !videoOk:
@@ -356,12 +383,42 @@ func router(w http.ResponseWriter, r *http.Request) {
     }
 }
 
+
+// loadIndex handles the index page
 // Example URL: /en
 func loadIndex(w http.ResponseWriter, r *http.Request, lang string) {
-    w.Header().Set("Content-Type", "text/plain")
-    fmt.Fprintf(w, "Loading Index Page\n")
-    fmt.Fprintf(w, "Language: %s\n", lang)
-    fmt.Fprintf(w, "URL Path: %s\n", r.URL.Path)
+	// w.Header().Set("Content-Type", "text/plain")
+    // fmt.Fprintf(w, "Loading Index Page\n")
+    // fmt.Fprintf(w, "Language: %s\n", lang)
+    // fmt.Fprintf(w, "URL Path: %s\n", r.URL.Path)
+    // Access the template directly if it's exported from the templates package
+    // Parse the template
+    //tmpl, err := template.ParseFiles("templates/home_templ.html")
+	tmpl, err := template.ParseFS(templateFS, filepath.Join("templates", "home.html"))
+
+	dir, _ := os.Getwd()
+	fmt.Println("Current directory:", dir)
+	fmt.Println("full path:", filepath.Join("templates", "home.html"))
+    if err != nil {
+        http.Error(w, fmt.Sprintf("Error loading template: %v", err), http.StatusInternalServerError)
+        return
+    }
+
+    // Prepare data to pass to the template
+    data := struct {
+        Language string
+        Path     string
+    }{
+        Language: lang,
+        Path:     r.URL.Path,
+    }
+
+    // Execute the template with the data
+    w.Header().Set("Content-Type", "text/html")
+    err = tmpl.Execute(w, data)
+    if err != nil {
+        http.Error(w, fmt.Sprintf("Error rendering template: %v", err), http.StatusInternalServerError)
+    }
 }
 
 // loadBlog handles the blog page

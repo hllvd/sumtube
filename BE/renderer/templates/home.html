@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="{{.Language}}">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>YouTube Summarizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  </head>
+  <body class="bg-gray-100">
+    <nav class="bg-red-600 p-4 text-white flex justify-between items-center">
+      <h1 class="text-xl font-bold">YouTube Summarizer</h1>
+      <button class="bg-white text-red-600 px-4 py-2 rounded">Login</button>
+    </nav>
+
+    <div class="max-w-2xl mx-auto mt-16 text-center" x-data="{ 
+      url: '', 
+      videoId: 'kOui0Ao1uwA',
+      language: 'pt',
+      loading: false,
+      result: '',
+      async summarize() {
+        this.loading = true;
+        try {
+            const response = await fetch('http://localhost:8080/summary', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    // 'Authorization': 'Bearer your-token' // If using auth
+                },
+                body: JSON.stringify({
+                    videoId: this.videoId,
+                    language: this.language
+                }),
+                // credentials: 'include' // Only if using cookies/auth
+            });
+            
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            
+            this.result = await response.json();
+            // Redirect after successful response
+            if (this.result && this.result.path && this.result.vid && this.result.lang) {
+                const currentHost = window.location.origin;
+                const redirectUrl = `${currentHost}/${this.result.lang}/${this.result.path}/${this.result.vid}`;
+                window.location.href = redirectUrl;
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            this.result = 'Error processing video';
+        }
+        this.loading = false;
+    }
+  }">
+      <h2 class="text-3xl font-bold">Summarize Any YouTube Video</h2>
+      <p class="text-gray-600 mt-2">
+        Enter a YouTube video URL and get an AI-generated summary.
+      </p>
+
+      <div class="mt-6 flex items-center justify-center gap-2">
+        <input
+          type="text"
+          x-model="url"
+          placeholder="Enter YouTube URL"
+          class="w-3/4 p-3 border rounded-lg shadow-sm"
+          @keyup.enter="summarize()"
+        />
+        <button 
+          @click="summarize()"
+          class="bg-red-600 text-white px-6 py-3 rounded-lg shadow-md"
+          x-bind:disabled="loading"
+        >
+          <span x-show="!loading">Summarize
+          <span x-show="loading">Processing...
+        </button>
+      </div>
+
+      <div x-show="result" class="mt-8 p-4 bg-white rounded-lg shadow">
+        <div x-text="result"></div>
+      </div>
+    </div>
+
+    <!-- Rest of your HTML -->
+  </body>
+</html>

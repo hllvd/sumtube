@@ -13,7 +13,7 @@ RUN go mod download
 COPY . .
 
 # Build the Go application.
-RUN CGO_ENABLED=0 GOOS=linux go build -o my-go-app .
+RUN CGO_ENABLED=0 GOOS=linux go build -o my-renderer-app .
 
 # Use a minimal alpine image for the final stage.
 FROM alpine:latest
@@ -22,10 +22,10 @@ FROM alpine:latest
 WORKDIR /root/
 
 # Copy the binary from the builder stage.
-COPY --from=builder /app/my-go-app .
+COPY --from=builder /app/my-renderer-app .
 
 # Expose the port the app runs on.
 EXPOSE 8080
 
 # Command to run the application.
-CMD ["./my-go-app"]
+CMD ["./my-renderer-app"]

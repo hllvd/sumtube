@@ -4,7 +4,10 @@ go 1.24.1
 
 require github.com/aws/aws-sdk-go-v2/service/dynamodb v1.41.1
 
-require cloud.google.com/go/compute/metadata v0.3.0 // indirect
+require (
+	cloud.google.com/go/compute/metadata v0.3.0 // indirect
+	github.com/rs/cors v1.11.1 // indirect
+)
 
 require (
 	github.com/aws/aws-lambda-go v1.47.0 // indirect

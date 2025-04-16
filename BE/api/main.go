@@ -17,15 +17,24 @@ import (
 
 	"context"
 
+	_ "embed"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/rs/cors"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
+
+//go:embed prompts/system1.prompt.txt
+var system1PromptTxt string
+
+//go:embed prompts/user1.prompt.txt
+var user1PromptTxt string
 
 // OAuth2 configuration for Google
 var googleOAuthConfig = &oauth2.Config{
@@ -243,7 +252,36 @@ func parseFields(input string) (string, error) {
     return string(jsonData), nil
 }
 
+// Using os.ReadDir (preferred for newer Go versions)
+func listPromptsDir(promptsDir string) error {
+    entries, err := os.ReadDir(promptsDir)
+    if err != nil {
+        return fmt.Errorf("failed to read prompts directory: %w", err)
+    }
+
+    fmt.Printf("Contents of %s:\n", promptsDir)
+    for _, entry := range entries {
+        // Get file info
+        info, err := entry.Info()
+        if err != nil {
+            continue
+        }
+        // Print file name and size
+        fmt.Printf("- %s (size: %d bytes)\n", entry.Name(), info.Size())
+    }
+    return nil
+}
+
+
 func summarizeText(caption string, lang string, title string) (string, error) {
+
+    systemPrompt := system1PromptTxt
+
+    userPromptTemplate := user1PromptTxt
+
+    // Rest of your function remains the same...
+    userPrompt := fmt.Sprintf(string(userPromptTemplate), title, lang, caption)
+
 	apiURL := "https://api.deepseek.com/chat/completions"
 	apiKey := os.Getenv("DEEPSEEK_API_KEY")
 	if apiKey == "" {
@@ -255,41 +293,11 @@ func summarizeText(caption string, lang string, title string) (string, error) {
 		"messages": []map[string]string{
 			{
 				"role":    "system",
-				"content": fmt.Sprintf(`You are a helpful assistant.  
-				I will provide a title, language and captions as input.  
-				
-				Your task is to generate a JSON output with three fields: $content, $lang, and $answer. Here's what each field should contain:  
-				
-				- ╔$content:
-				  - A summarized version of the text in Markdown format.  
-				  - Use **bold**, *italic*, lists, and headers for emphasis where needed. Use \n for line breaks.  
-				  - If you need to use quotes, wrap the sentence with underscores (_like this_) instead of regular quotes.  
-				  - If more text is required, you may add an extra paragraph, but it should not exceed 300 words.  
-				  - If the title is a listicle (e.g., "Top 10 Ways to..."), format the summary as a list.
-				  - You can link the subject of the summary to its context in the video by specifying the exact timestamp. For example: "[Elon Musk](00:10:51) said that...". This will link to minute 10, second 51 of the text.
-				  - If the summary is in list format, start with a **bold subtitle**, followed by a sentence that includes a timestamp linking to the specific moment in the video. Example: "**Key Takeaways**\n\n[At 10:51](00:10:51), Elon Musk said...". Then, present the summarized points in a clear and structured list.
-				  - Keep it concise and structured without stating that it is a summary
-				  - When finish the content of this field, please use ╗
-				
-				- ╔$lang:
-				  - Detect and output the language code of the text.  
-				  - Example: "en", "pt", "es", "it", "fr", "de".
-				  - When finish the content of this field, please use ╗  
-				
-				- ╔$answer:
-				  - If the title is a question, provide a concise answer (maximum 32 words). This is important!  
-				  - If the title is not a question, rephrase it starting with "When", "How", or "How to" so that it can be answered.
-				  - When finish the content of this field, please use ╗
-				
-				** The final expected output would be something like: ** 
-				╔$content:[Summarized text here] ╗
-				╔$lang:[lang here] ╗
-				╔$answer:[Answer here] ╗
-				}`),
+				"content": string(systemPrompt),
 			},
 			{
 				"role":    "user",
-				"content": fmt.Sprintf("I would like to summarize this text with title `[when|how|how to] %s ?` in %s language, the caption is: %s", title, lang, caption),
+				"content": userPrompt,
 			},
 		},
 		"stream": false,
@@ -486,9 +494,8 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
     }
 
 	subtitleKey := videoID + "-caption.txt"
-	subtitleSanitized, s3Err := fetchS3(subtitleKey) 
-	println("subtitleSanitized: ", subtitleSanitized)
-	println("s3Err: ", s3Err)
+	subtitleSanitized, _ := fetchS3(subtitleKey) 
+
 	if subtitleSanitized == "" {
 		subtitle, err := downloadSubtitle(videoURL, videoLanguage)
 		if err != nil {
@@ -590,10 +597,45 @@ func handleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
+func enableCORS(next http.HandlerFunc) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        // Set CORS headers
+        w.Header().Set("Access-Control-Allow-Origin", "*") // Adjust this to be more restrictive if needed
+        w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+        w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        w.Header().Set("Access-Control-Allow-Credentials", "true")
+        w.Header().Set("Access-Control-Max-Age", "86400") // 24 hours
+
+        // If this is a preflight request, respond with just the headers
+        if r.Method == "OPTIONS" {
+            w.WriteHeader(http.StatusNoContent)
+            return
+        }
+
+        // Call the next handler
+        next(w, r)
+    }
+}
+
 func main() {
-	http.HandleFunc("/summary", handleSummaryRequest)
-    http.HandleFunc("/redirects", handleGoogleRedirect) // OAuth2 redirect endpoint
-	http.HandleFunc("/login", handleGoogleLogin)      // Start OAuth2 flow
-	fmt.Println("Server started at :8080 test")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	  // Create a new CORS handler
+	  c := cors.New(cors.Options{
+        AllowedOrigins:   []string{"*"}, // Adjust this to your frontend URL(s)
+        AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+        AllowedHeaders:   []string{"Content-Type", "Authorization"},
+        AllowCredentials: true,
+        Debug:           true, // Set to false in production
+    })
+
+    // Create your router
+    mux := http.NewServeMux()
+    mux.HandleFunc("/summary", handleSummaryRequest)
+    mux.HandleFunc("/redirects", handleGoogleRedirect)
+    mux.HandleFunc("/login", handleGoogleLogin)
+
+    // Wrap your router with the CORS handler
+    handler := c.Handler(mux)
+
+    fmt.Println("Server started at :8080 test")
+    log.Fatal(http.ListenAndServe(":8080", handler))
 }
