@@ -408,9 +408,11 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string) {
     data := struct {
         Language string
         Path     string
+		ApiUrl   string
     }{
         Language: lang,
         Path:     r.URL.Path,
+		ApiUrl:   os.Getenv("SUMTUBE_API"),
     }
 
     // Execute the template with the data
