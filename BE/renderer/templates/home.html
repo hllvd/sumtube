@@ -1,11 +1,19 @@
 <!DOCTYPE html>
-<html lang="{{.Language}}">
+<html lang="{{if eq .Language "pt"}}pt-br{{else}}{{.Language}}{{end}}">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>YouTube Summarizer</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script
+      defer
+      src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"
+    ></script>
+    <script>
+      //var apiUrl = "{{.ApiUrl}}"
+      var apiUrl  = "http://localhost:8080/summary"
+      var lang = "{{.Language}}"
+    </script>
   </head>
   <body class="bg-gray-100">
     <nav class="bg-red-600 p-4 text-white flex justify-between items-center">
@@ -13,26 +21,48 @@
       <button class="bg-white text-red-600 px-4 py-2 rounded">Login</button>
     </nav>
 
-    <div class="max-w-2xl mx-auto mt-16 text-center" x-data="{ 
+    <div
+      class="max-w-2xl mx-auto mt-16 text-center"
+      x-data="{ 
       url: '', 
-      videoId: 'kOui0Ao1uwA',
-      language: 'pt',
+      videoId: '',
+      language: lang,
       loading: false,
       result: '',
+      extractVideoId(url) {
+        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+        const match = url.match(regExp);
+        
+        if (match && match[2].length === 11) {
+          return match[2];
+        } else {
+          const shortUrlRegex = /youtu.be\/([^#\&\?]*)/;
+          const shortMatch = url.match(shortUrlRegex);
+          if (shortMatch && shortMatch[1].length === 11) {
+            return shortMatch[1];
+          }
+          return null;
+        }
+      },
       async summarize() {
+        this.videoId = this.extractVideoId(this.url);
+        if (!this.videoId) {
+          this.result = 'Please enter a valid YouTube URL';
+          return;
+        }
+        
         this.loading = true;
+        this.result = '';
         try {
-            const response = await fetch('http://localhost:8080/summary', {
+            const response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    // 'Authorization': 'Bearer your-token' // If using auth
                 },
                 body: JSON.stringify({
                     videoId: this.videoId,
                     language: this.language
                 }),
-                // credentials: 'include' // Only if using cookies/auth
             });
             
             if (!response.ok) {
@@ -40,7 +70,6 @@
             }
             
             this.result = await response.json();
-            // Redirect after successful response
             if (this.result && this.result.path && this.result.vid && this.result.lang) {
                 const currentHost = window.location.origin;
                 const redirectUrl = `${currentHost}/${this.result.lang}/${this.result.path}/${this.result.vid}`;
@@ -51,8 +80,9 @@
             this.result = 'Error processing video';
         }
         this.loading = false;
-    }
-  }">
+      }
+    }"
+    >
       <h2 class="text-3xl font-bold">Summarize Any YouTube Video</h2>
       <p class="text-gray-600 mt-2">
         Enter a YouTube video URL and get an AI-generated summary.
@@ -62,25 +92,94 @@
         <input
           type="text"
           x-model="url"
-          placeholder="Enter YouTube URL"
-          class="w-3/4 p-3 border rounded-lg shadow-sm"
+          placeholder="Enter YouTube URL (e.g., https://www.youtube.com/watch?v=dQw4w9WgXcQ)"
+          class="w-3/4 p-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
           @keyup.enter="summarize()"
+          :disabled="loading"
         />
-        <button 
+        <button
           @click="summarize()"
-          class="bg-red-600 text-white px-6 py-3 rounded-lg shadow-md"
-          x-bind:disabled="loading"
+          class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg shadow-md transition-colors duration-200 flex items-center justify-center min-w-32"
+          :disabled="loading || !url"
         >
-          <span x-show="!loading">Summarize
-          <span x-show="loading">Processing...
+          <span x-show="!loading" class="flex items-center">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-5 w-5 mr-1"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            Summarize
+          </span>
+          <span x-show="loading" class="flex items-center">
+            <!-- Loading spinner -->
+            <svg
+              class="animate-spin -ml-1 mr-2 h-5 w-5 text-white"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                stroke-width="4"
+              ></circle>
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
+            </svg>
+            Processing...
+          </span>
         </button>
       </div>
 
-      <div x-show="result" class="mt-8 p-4 bg-white rounded-lg shadow">
+      <!-- Loading animation container -->
+      <div x-show="loading" class="mt-8 p-6 bg-white rounded-lg shadow-md">
+        <div class="flex flex-col items-center justify-center space-y-4">
+          <svg
+            class="animate-spin h-12 w-12 text-red-600"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              stroke-width="4"
+            ></circle>
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            ></path>
+          </svg>
+          <p class="text-gray-700 font-medium">Generating your summary...</p>
+          <p class="text-gray-500 text-sm">
+            This may take a few moments depending on the video length
+          </p>
+        </div>
+      </div>
+
+      <div
+        x-show="result && !result.path && !loading"
+        class="mt-8 p-4 bg-white rounded-lg shadow"
+      >
         <div x-text="result"></div>
       </div>
     </div>
-
-    <!-- Rest of your HTML -->
   </body>
 </html>
