@@ -241,7 +241,7 @@ func extractTitle(path string) (string, bool) {
 		return "", false
 	}
 
-func (c *LoadController) HandleLoad(w http.ResponseWriter, r *http.Request) {
+func (c *LoadController) LoadContent(w http.ResponseWriter, r *http.Request) {
     println("HandleLoad")
 	path := r.URL.Path
     
@@ -387,13 +387,6 @@ func router(w http.ResponseWriter, r *http.Request) {
 // loadIndex handles the index page
 // Example URL: /en
 func loadIndex(w http.ResponseWriter, r *http.Request, lang string) {
-	// w.Header().Set("Content-Type", "text/plain")
-    // fmt.Fprintf(w, "Loading Index Page\n")
-    // fmt.Fprintf(w, "Language: %s\n", lang)
-    // fmt.Fprintf(w, "URL Path: %s\n", r.URL.Path)
-    // Access the template directly if it's exported from the templates package
-    // Parse the template
-    //tmpl, err := template.ParseFiles("templates/home_templ.html")
 	tmpl, err := template.ParseFS(templateFS, filepath.Join("templates", "home.html"))
 
 	dir, _ := os.Getwd()
@@ -426,12 +419,34 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string) {
 // loadBlog handles the blog page
 // Example URL: /en/my-video-title/dQw4w9WgXcQ
 func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId string) {
-    w.Header().Set("Content-Type", "text/plain")
-    fmt.Fprintf(w, "Loading Blog Page\n")
-    fmt.Fprintf(w, "Language: %s\n", lang)
-    fmt.Fprintf(w, "Title: %s\n", title)
-    fmt.Fprintf(w, "Video ID: %s\n", videoId)
-    fmt.Fprintf(w, "URL Path: %s\n", r.URL.Path)
+    tmpl, err := template.ParseFS(templateFS, filepath.Join("templates", "blog.html"))
+
+    if err != nil {
+        http.Error(w, fmt.Sprintf("Error loading template: %v", err), http.StatusInternalServerError)
+        return
+    }
+
+    // Prepare data to pass to the template
+    data := struct {
+        Language string
+        Path     string
+		ApiUrl   string
+		VideoId  string
+		Title	 string
+    }{
+        Language: 	lang,
+        Path:     	r.URL.Path,
+		ApiUrl:   	os.Getenv("SUMTUBE_API"),
+		VideoId:  	videoId,
+		Title:	 	title,
+    }
+
+    // Execute the template with the data
+    w.Header().Set("Content-Type", "text/html")
+    err = tmpl.Execute(w, data)
+    if err != nil {
+        http.Error(w, fmt.Sprintf("Error rendering template: %v", err), http.StatusInternalServerError)
+    }
 }
 
 // loadSummy handles the summary page

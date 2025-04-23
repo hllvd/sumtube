@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="{{if eq .Language "pt"}}pt-br{{else}}{{.Language}}{{end}}">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Video Summary - Blog</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100 text-gray-800">
+    <!-- Reused Header from Homepage -->
+    <nav class="bg-red-600 p-4 text-white flex justify-between items-center">
+      <h1 class="text-xl font-bold">YouTube Summarizer</h1>
+      <button class="bg-white text-red-600 px-4 py-2 rounded">Login</button>
+    </nav>
+
+    <div class="max-w-6xl mx-auto p-4 lg:flex lg:gap-8">
+      <!-- Main Content -->
+      <main class="lg:w-2/3">
+        <!-- Blog Header -->
+        <img
+          src="https://img.youtube.com/vi/{{.VideoId}}/0.jpg"
+          alt="Video Cover"
+          class="rounded-xl shadow mb-6 w-full"
+        />
+
+        <h1 class="text-3xl font-bold mb-2">
+          {{.Title}}
+        </h1>
+        <p class="text-sm text-gray-500 mb-4">
+          Posted on April 22, 2025 • 6 min read
+        </p>
+
+        <!-- Blog Content -->
+        <article class="space-y-4 text-lg leading-relaxed">
+          <p>
+            In a recent talk, Elon Musk dove deep into the future of artificial
+            intelligence and its role in shaping our world. He emphasized both
+            the power and the danger of AI, calling it humanity’s “most
+            significant risk.” According to Musk, the most crucial step we can
+            take is to ensure that AI development aligns with human values and
+            long-term survival.
+          </p>
+
+          <p>
+            He discussed the role of regulators, suggesting that governments
+            must act swiftly—before AI systems reach a point of no return. Musk
+            believes that we are only a few years away from Artificial General
+            Intelligence (AGI), and if we’re not careful, we might lose control
+            of our future.
+          </p>
+
+          <p>
+            One interesting moment came when he described AI as a kind of
+            “digital god,” hinting at the responsibility we have as creators of
+            this force. While many view AI with optimism, Musk urged the
+            audience not to confuse capability with safety. Just because an AI
+            can perform human-like tasks doesn’t mean it’s harmless.
+          </p>
+
+          <p>
+            The talk ended with a strong message: the future depends on our
+            choices today. We must push for transparency, control, and ethical
+            guidelines now, while we still can.
+          </p>
+        </article>
+
+        <!-- Share Button -->
+        <div class="mt-6">
+          <a
+            href="#"
+            class="inline-block bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+          >
+            🔗 Share this summary
+          </a>
+        </div>
+
+        <!-- Question Section -->
+        <div class="mt-10 bg-white p-6 rounded-lg shadow-md">
+          <h2 class="text-xl font-semibold mb-2">
+            Have a question about the video?
+          </h2>
+          <p class="text-gray-600 mb-4">
+            We'll use your question to improve this summary or create a new one.
+          </p>
+          <textarea
+            class="w-full p-3 border rounded-lg resize-none"
+            rows="4"
+            placeholder="Type your question here..."
+          ></textarea>
+          <button
+            class="mt-4 bg-red-600 text-white px-5 py-2 rounded hover:bg-red-700"
+          >
+            Submit
+          </button>
+        </div>
+      </main>
+
+      <!-- Related Videos Sidebar -->
+      <aside class="lg:w-1/3 mt-10 lg:mt-0">
+        <h3 class="text-lg font-semibold mb-4">📺 Related Videos</h3>
+        <ul class="space-y-4">
+          <li class="flex gap-4">
+            <img
+              src="https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg"
+              alt="Video thumbnail"
+              class="w-20 h-14 object-cover rounded"
+            />
+            <div>
+              <p class="font-medium text-sm">
+                The Future of AI: What You Need to Know
+              </p>
+              <a href="#" class="text-sm text-red-600 hover:underline"
+                >Watch Summary</a
+              >
+            </div>
+          </li>
+          <li class="flex gap-4">
+            <img
+              src="https://img.youtube.com/vi/zpOULjyy-n8/hqdefault.jpg"
+              alt="Video thumbnail"
+              class="w-20 h-14 object-cover rounded"
+            />
+            <div>
+              <p class="font-medium text-sm">Why Elon Musk is Scared of AI</p>
+              <a href="#" class="text-sm text-red-600 hover:underline"
+                >Watch Summary</a
+              >
+            </div>
+          </li>
+        </ul>
+      </aside>
+    </div>
+
+    <!-- Optional footer can be added here -->
+  </body>
+</html>
