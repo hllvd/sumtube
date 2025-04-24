@@ -406,7 +406,7 @@ func router(w http.ResponseWriter, r *http.Request) {
         
     // Case 4: Only language and video ID exist or only videoId exist - load summary
     case videoOk && !titleOk:
-        loadSummary(w, r, videoId)
+        loadSummary(w, r, videoId, videoId)
         
     // Default case: Invalid route
     default:
@@ -466,7 +466,6 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
         return
     }
 
-    // Rest of your code...
     result, err := GetVideoContent(videoId, lang)
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -510,13 +509,78 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
 
 // loadSummy handles the summary page
 // Example URL: /en/dQw4w9WgXcQ
-func loadSummary(w http.ResponseWriter, r *http.Request, videoId string) {
-    lang := langHandle(w, r)
-	w.Header().Set("Content-Type", "text/plain")
-    fmt.Fprintf(w, "Loading Summary Page\n")
-    fmt.Fprintf(w, "Language: %s\n", lang)
-    fmt.Fprintf(w, "Video ID: %s\n", videoId)
-    fmt.Fprintf(w, "URL Path: %s\n", r.URL.Path)
+func loadSummary(w http.ResponseWriter, r *http.Request, videoId string, lang string) {
+    result, err := GetVideoContent(videoId, lang)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+    println("HERE path: %s",  result["path"].(string) )
+    // Check if path exists and redirect if it does
+    if path, ok := result["path"].(string); ok && path != "" {
+        baseUrl := os.Getenv("BASE_URL")
+        if baseUrl == "" {
+            baseUrl = "http://" + r.Host
+        }
+        
+        // Clean up the path to remove any leading/trailing slashes
+        cleanPath := strings.Trim(path, "/")
+        
+        // Build the new URL
+        newUrl := fmt.Sprintf("%s/%s/%s/%s", baseUrl, lang, cleanPath, videoId)
+        
+        // Permanent redirect (301)
+        http.Redirect(w, r, newUrl, http.StatusMovedPermanently)
+        return
+    }
+
+    // Continue with normal template rendering if no path exists
+    // Create a template function map
+    funcMap := template.FuncMap{
+        "ConvertMarkdownToHTML": ConvertMarkdownToHTML,
+    }
+
+    // Create a new template with the function map
+    tmpl := template.New("blog.html").Funcs(funcMap)
+    
+    // Parse the template file
+    tmpl, err = tmpl.ParseFS(templateFS, filepath.Join("templates", "blog.html"))
+    if err != nil {
+        http.Error(w, fmt.Sprintf("Error loading template: %v", err), http.StatusInternalServerError)
+        return
+    }
+    
+    // Extract properties from the response
+    content := result["content"].(string)
+    answer := result["answer"].(string)
+    contentTitle := result["title"].(string)
+
+    data := struct {
+        Language    string
+        Path       string
+        ApiUrl     string
+        BaseUrl    string
+        VideoId    string
+        Title      string
+        Content    template.HTML
+        Answer     template.HTML
+    }{
+        Language:    lang,
+        Path:       r.URL.Path,
+        ApiUrl:     os.Getenv("SUMTUBE_API"),
+        BaseUrl:    os.Getenv("BASE_URL"),
+        VideoId:    videoId,
+        Title:      contentTitle,
+        Content:    template.HTML(ConvertMarkdownToHTML(content)),
+        Answer:     template.HTML(ConvertMarkdownToHTML(answer)),
+    }
+
+    // Execute the template with the data
+    w.Header().Set("Content-Type", "text/html")
+    err = tmpl.Execute(w, data)
+    if err != nil {
+        http.Error(w, fmt.Sprintf("Error rendering template: %v", err), http.StatusInternalServerError)
+    }
 }
 
 
