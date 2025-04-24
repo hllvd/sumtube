@@ -482,6 +482,7 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
         Language    string
         Path       string
         ApiUrl     string
+		BaseUrl    string
         VideoId    string
         Title      string
         Content    template.HTML
@@ -490,6 +491,7 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
         Language:    lang,
         Path:       r.URL.Path,
         ApiUrl:     os.Getenv("SUMTUBE_API"),
+		BaseUrl: 	os.Getenv("BASE_URL"),
         VideoId:    videoId,
         Title:      contentTitle,
         Content:    template.HTML(ConvertMarkdownToHTML(content)),  // Convert the string to template.HTML
