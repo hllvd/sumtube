@@ -13,6 +13,10 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/gomarkdown/markdown"
+	"github.com/gomarkdown/markdown/html"
+	"github.com/gomarkdown/markdown/parser"
 )
 
 //go:embed templates/*
@@ -241,54 +245,79 @@ func extractTitle(path string) (string, bool) {
 		return "", false
 	}
 
+// GetVideoContent fetches content from the API for a given video ID and language
+func GetVideoContent(videoID, lang string) (map[string]interface{}, error) {
+    // Prepare the payload
+    payload := map[string]string{
+        "videoId":  videoID,
+        "language": lang,
+    }
+    
+    payloadBytes, err := json.Marshal(payload)
+    if err != nil {
+        return nil, fmt.Errorf("failed to encode payload: %v", err)
+    }
+    
+    // Call the API
+	//
+    resp, err := http.Post(os.Getenv("SUMTUBE_API"), "application/json", bytes.NewBuffer(payloadBytes))
+    if err != nil {
+        return nil, fmt.Errorf("failed to call API: %v", err)
+    }
+    defer resp.Body.Close()
+    
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return nil, fmt.Errorf("failed to read API response: %v", err)
+    }
+    
+    var result map[string]interface{}
+    if err := json.Unmarshal(body, &result); err != nil {
+        return nil, fmt.Errorf("failed to parse API response: %v", err)
+    }
+    
+    return result, nil
+}
+
+// ConvertMarkdownToHTML converts a markdown string to HTML
+func ConvertMarkdownToHTML(md string) string {
+	// Create markdown parser with extensions
+	extensions := parser.CommonExtensions | parser.AutoHeadingIDs | parser.NoEmptyLineBeforeBlock
+	p := parser.NewWithExtensions(extensions)
+
+	// Parse markdown to AST
+	doc := p.Parse([]byte(md))
+
+	// Create HTML renderer with common extensions
+	htmlFlags := html.CommonFlags | html.HrefTargetBlank
+	opts := html.RendererOptions{Flags: htmlFlags}
+	renderer := html.NewRenderer(opts)
+
+	// Render AST to HTML
+	return string(markdown.Render(doc, renderer))
+}
+
+// LoadContent handles the HTTP request for video content
 func (c *LoadController) LoadContent(w http.ResponseWriter, r *http.Request) {
     println("HandleLoad")
-	path := r.URL.Path
+    path := r.URL.Path
     
-	// Extract user's lang
-	language := langHandle(w, r)
+    // Extract user's lang
+    language := langHandle(w, r)
 
-	videoID, isVideoID := extractVideoId(path)
+    videoID, isVideoID := extractVideoId(path)
     if !isVideoID {
         http.Error(w, "Invalid YouTube ID", http.StatusBadRequest)
         return
     }
 
-	println("HandleLoad videoID: ", videoID)
-	println("HandleLoad language: ", language)
-	
-    // Prepare the payload to send to the Docker API server
-    payload := map[string]string{
-        "videoId":  videoID,
-        "language": language,
-    }
+    println("HandleLoad videoID: ", videoID)
+    println("HandleLoad language: ", language)
     
-    // Convert the payload to JSON
-    payloadBytes, err := json.Marshal(payload)
+    // Get the content using the new function
+    result, err := GetVideoContent(videoID, language)
     if err != nil {
-        http.Error(w, "Failed to encode payload", http.StatusInternalServerError)
-        return
-    }
-    
-    // Send a POST request to the Docker API server
-    resp, err := http.Post(os.Getenv("SUMTUBE_API"), "application/json", bytes.NewBuffer(payloadBytes))
-    if err != nil {
-        http.Error(w, "Failed to call Docker API server", http.StatusInternalServerError)
-        return
-    }
-    defer resp.Body.Close()
-    
-    // Read the response body
-    body, err := io.ReadAll(resp.Body)
-    if err != nil {
-        http.Error(w, "Failed to read Docker API response", http.StatusInternalServerError)
-        return
-    }
-    
-    // Parse the JSON response
-    var result map[string]interface{}
-    if err := json.Unmarshal(body, &result); err != nil {
-        http.Error(w, fmt.Sprintf("Failed to parse Docker API response: %s", body), http.StatusInternalServerError)
+        http.Error(w, err.Error(), http.StatusInternalServerError)
         return
     }
     
@@ -296,12 +325,14 @@ func (c *LoadController) LoadContent(w http.ResponseWriter, r *http.Request) {
     responseLang := result["lang"].(string)
     content := result["content"].(string)
     answer := result["answer"].(string)
+
+	htmlContent := ConvertMarkdownToHTML(content)
     
     // Create structured JSON response
     response := map[string]interface{}{
         "videoId": videoID,
         "lang":    responseLang,
-        "content": content,
+        "content": htmlContent,
         "answer":  answer,
     }
     
@@ -405,7 +436,7 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string) {
     }{
         Language: lang,
         Path:     r.URL.Path,
-		ApiUrl:   os.Getenv("SUMTUBE_API"),
+		ApiUrl:   os.Getenv("SUMTUBE_API_PUBLIC"),
     }
 
     // Execute the template with the data
@@ -418,27 +449,51 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string) {
 
 // loadBlog handles the blog page
 // Example URL: /en/my-video-title/dQw4w9WgXcQ
+// When parsing the template, create a FuncMap and add it to the template:
 func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId string) {
-    tmpl, err := template.ParseFS(templateFS, filepath.Join("templates", "blog.html"))
+    // Create a template function map
+    funcMap := template.FuncMap{
+        "ConvertMarkdownToHTML": ConvertMarkdownToHTML,
+    }
 
+    // Create a new template with the function map
+    tmpl := template.New("blog.html").Funcs(funcMap)
+    
+    // Parse the template file
+    tmpl, err := tmpl.ParseFS(templateFS, filepath.Join("templates", "blog.html"))
     if err != nil {
         http.Error(w, fmt.Sprintf("Error loading template: %v", err), http.StatusInternalServerError)
         return
     }
 
-    // Prepare data to pass to the template
+    // Rest of your code...
+    result, err := GetVideoContent(videoId, lang)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+    
+    // Extract properties from the response
+    content := result["content"].(string)
+    answer := result["answer"].(string)
+    contentTitle := result["title"].(string)
+
     data := struct {
-        Language string
-        Path     string
-		ApiUrl   string
-		VideoId  string
-		Title	 string
+        Language    string
+        Path       string
+        ApiUrl     string
+        VideoId    string
+        Title      string
+        Content    template.HTML
+        Answer     template.HTML
     }{
-        Language: 	lang,
-        Path:     	r.URL.Path,
-		ApiUrl:   	os.Getenv("SUMTUBE_API"),
-		VideoId:  	videoId,
-		Title:	 	title,
+        Language:    lang,
+        Path:       r.URL.Path,
+        ApiUrl:     os.Getenv("SUMTUBE_API"),
+        VideoId:    videoId,
+        Title:      contentTitle,
+        Content:    template.HTML(ConvertMarkdownToHTML(content)),  // Convert the string to template.HTML
+        Answer:     template.HTML(ConvertMarkdownToHTML(answer)),
     }
 
     // Execute the template with the data
@@ -448,6 +503,8 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
         http.Error(w, fmt.Sprintf("Error rendering template: %v", err), http.StatusInternalServerError)
     }
 }
+
+
 
 // loadSummy handles the summary page
 // Example URL: /en/dQw4w9WgXcQ
