@@ -370,14 +370,6 @@ func sanitizeSubtitle(subtitle string) string {
 	return summarizedSanitized
 }
 
-type GPTResponseToJson struct {
-    Title   string `json:"title"`
-    Vid     string `json:"vid"`
-    Content string `json:"content"`
-    Lang    string `json:"lang"`
-    Answer  string `json:"answer"`
-    Path    string `json:"path"` // Adding path since it's available
-}
 
 func getFromDynamoDb(language string, videoID string) (map[string]string, error) {
     compositeKey := fmt.Sprintf("%s#%s", videoID, language)
@@ -431,13 +423,13 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-	// Parse URL query parameters
+    // Parse URL query parameters
     queryParams := r.URL.Query()
     force := queryParams.Get("force") == "true"
 
     var requestBody struct {
-        VideoID string `json:"videoId"`
-		Language string `json:"language"`
+        VideoID  string `json:"videoId"`
+        Language string `json:"language"`
     }
     if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
         http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -452,120 +444,105 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-	// If force is false, try to get cached summary from DynamoDB
+    // If force is false, try to get cached summary from DynamoDB
     if !force {
-		type ContentData struct {
-			Content string `json:"content"`
-			Answer  string `json:"answer"`
-		}
+        type ContentData struct {
+            Content string `json:"content"`
+            Answer  string `json:"answer"`
+        }
 
         cachedData, err := getFromDynamoDb(requestBody.Language, videoID)
-		if err == nil && cachedData != nil {
-			// Parse the JSON content from DynamoDB
-			var contentData ContentData
-			err := json.Unmarshal([]byte(cachedData["content"]), &contentData)
-			if err != nil {
-				// Handle JSON parsing error
-				http.Error(w, "Failed to parse content data", http.StatusInternalServerError)
-				return
-			}
+        if err == nil && cachedData != nil {
+            // Parse the JSON content from DynamoDB
+            var contentData ContentData
+            err := json.Unmarshal([]byte(cachedData["content"]), &contentData)
+            if err != nil {
+                http.Error(w, "Failed to parse content data", http.StatusInternalServerError)
+                return
+            }
 
-			// Create the structured response
-			response := GPTResponseToJson{
-				Title:   cachedData["title"],
-				Vid:     videoID,
-				Content: contentData.Content,
-				Lang:    requestBody.Language,
-				Answer:  contentData.Answer,
-				Path:    cachedData["path"], // Include path if needed
-			}
+            response := GPTResponseToJson{
+                Title:   cachedData["title"],
+                Vid:     videoID,
+                Content: contentData.Content,
+                Lang:    requestBody.Language,
+                Answer:  contentData.Answer,
+                Path:    cachedData["path"],
+                Status:  "completed", // Add status field
+            }
 
-			// Return the response as JSON
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(response)
-			return
-		}
+            w.Header().Set("Content-Type", "application/json")
+            json.NewEncoder(w).Encode(response)
+            return
+        }
     }
 
+    // Get basic metadata first (synchronous)
     title, videoLanguage, videoMetadataErr := getVideoMetadata(videoURL)
     if videoMetadataErr != nil {
         http.Error(w, fmt.Sprintf("Error fetching video metadata: %v", videoMetadataErr), http.StatusInternalServerError)
         return
     }
 
-	subtitleKey := videoID + "-caption.txt"
-	subtitleSanitized, _ := fetchS3(subtitleKey) 
-
-	if subtitleSanitized == "" {
-		subtitle, err := downloadSubtitle(videoURL, videoLanguage)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Error downloading subtitle: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		subtitleSanitized = sanitizeSubtitle(subtitle)
-		
-		go func() {
-			if err := uploadToS3(subtitleSanitized, subtitleKey); err != nil {
-				log.Printf("Error uploading subtitle to S3: %v\n", err)
-			}
-		}()
-	}
-	
-    summary, err := summarizeText(subtitleSanitized, requestBody.Language, title)
-    if err != nil {
-        http.Error(w, fmt.Sprintf("Error summarizing caption: %v", err), http.StatusInternalServerError)
-        return
-    }
-    fmt.Printf("\n Debug summary: %+v\n", summary)
-
-    sanitizedSummary, err := parseFields(summary)
-    if err != nil {
-        http.Error(w, fmt.Sprintf("Error sanitizing summary JSON: %v", err), http.StatusInternalServerError)
-        return
+    // Immediate response with processing status
+    initialResponse := GPTResponseToJson{
+        Vid:     videoID,
+        Title:   title,
+        Lang:    requestBody.Language,
+        Status:  "processing",
     }
 
-    fmt.Printf("\n Debug sanitizedSummary: %+v\n", sanitizedSummary)
-
-	path := convertTitleToURL(title)
-	if err := pushToDynamoDB(videoID, requestBody.Language, title, sanitizedSummary, path); err != nil {
-		http.Error(w, fmt.Sprintf("Error pushing to DynamoDB: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-    // Create a variable to hold the unmarshaled summary data
-    var summaryData map[string]string
-    if err := json.Unmarshal([]byte(sanitizedSummary), &summaryData); err != nil {
-        http.Error(w, fmt.Sprintf("Error parsing sanitized summary JSON: %v", err), http.StatusInternalServerError)
-        return
-    }
-
-    // Create the response struct with all fields
-    response := GPTResponseToJson{
-        Title:    title,
-        Vid:      videoID,
-        Content:  summaryData["content"],  // Will be mapped to "content" in JSON
-        Lang: summaryData["lang"], // Will be mapped to "lang" in JSON
-        Answer:   summaryData["answer"],
-		Path: path,
-    }
-
-    // Print debug information
-    fmt.Printf("Debug response: %+v\n", response)
-
-    // Convert to JSON
-    jsonResponse, err := json.Marshal(response)
-    if err != nil {
-        http.Error(w, fmt.Sprintf("Error encoding JSON response: %v", err), http.StatusInternalServerError)
-        return
-    }
-
-    fmt.Printf("Debug jsonResponse: %s\n", jsonResponse)
-    
     w.Header().Set("Content-Type", "application/json")
-    w.Write(jsonResponse)
+    json.NewEncoder(w).Encode(initialResponse)
+
+    // Start async processing
+    go func() {
+        subtitleKey := videoID + "-caption.txt"
+        subtitleSanitized, _ := fetchS3(subtitleKey)
+
+        if subtitleSanitized == "" {
+            subtitle, err := downloadSubtitle(videoURL, videoLanguage)
+            if err != nil {
+                log.Printf("Error downloading subtitle: %v\n", err)
+                return
+            }
+
+            subtitleSanitized = sanitizeSubtitle(subtitle)
+            
+            if err := uploadToS3(subtitleSanitized, subtitleKey); err != nil {
+                log.Printf("Error uploading subtitle to S3: %v\n", err)
+            }
+        }
+        
+        summary, err := summarizeText(subtitleSanitized, requestBody.Language, title)
+        if err != nil {
+            log.Printf("Error summarizing caption: %v\n", err)
+            return
+        }
+
+        sanitizedSummary, err := parseFields(summary)
+        if err != nil {
+            log.Printf("Error sanitizing summary JSON: %v\n", err)
+            return
+        }
+
+        path := convertTitleToURL(title)
+        if err := pushToDynamoDB(videoID, requestBody.Language, title, sanitizedSummary, path); err != nil {
+            log.Printf("Error pushing to DynamoDB: %v\n", err)
+        }
+    }()
 }
 
+// Update your GPTResponseToJson struct to include Status field
+type GPTResponseToJson struct {
+    Title   string `json:"title"`
+    Vid     string `json:"videoId"`
+    Content string `json:"content,omitempty"`
+    Lang    string `json:"lang"`
+    Answer  string `json:"answer,omitempty"`
+    Path    string `json:"path,omitempty"`
+    Status  string `json:"status"` // Mandatory field
+}
 // Handle Google OAuth2 redirect
 func handleGoogleRedirect(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
