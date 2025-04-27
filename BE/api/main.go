@@ -80,23 +80,41 @@ func extractVideoID(url string) (string, error) {
 }
 
 type VideoMetadata struct {
-	Title    string `json:"title"`
-	Language string `json:"language"`
+	Title       string   `json:"title"`
+	Language    string   `json:"language"`
+	UploaderID  string   `json:"uploader_id"`
+	UploadDate  string   `json:"upload_date"`
+	Duration    float64  `json:"duration"`
+	ChannelID   string   `json:"channel_id"`
+	Categories  []string `json:"categories"`
 }
 
-func getVideoMetadata(videoURL string) (string, string, error) {
+func getVideoMetadata(videoURL string) (string, string, string, string, float64, string, string, error) {
 	cmd := exec.Command("yt-dlp", "--dump-json", videoURL)
 	output, err := cmd.Output()
 	if err != nil {
-		return "", "", fmt.Errorf("failed to run yt-dlp: %w", err)
+		return "", "", "", "", 0, "", "", fmt.Errorf("failed to run yt-dlp: %w", err)
 	}
 
 	var metadata VideoMetadata
 	if err := json.Unmarshal(output, &metadata); err != nil {
-		return "", "", fmt.Errorf("failed to parse metadata: %w", err)
+		return "", "", "", "", 0, "", "", fmt.Errorf("failed to parse metadata: %w", err)
 	}
 
-	return metadata.Title, metadata.Language, nil
+	// Get first category or empty string if none
+	category := ""
+	if len(metadata.Categories) > 0 {
+		category = metadata.Categories[0]
+	}
+
+	return metadata.Title,
+		metadata.Language,
+		metadata.UploaderID,
+		metadata.UploadDate,
+		metadata.Duration,
+		metadata.ChannelID,
+		category,
+		nil
 }
 
 func convertTitleToURL(title string) string {
@@ -193,30 +211,40 @@ func fetchS3(key string) (string, error) {
     return string(content), nil
 }
 
-func pushToDynamoDB(videoID string, lang string, title string, summary string, path string) error {
-	compositeKey := fmt.Sprintf("%s#%s", videoID, lang)
-	item := map[string]dynamodbtypes.AttributeValue{
-		"id": &dynamodbtypes.AttributeValueMemberS{Value: compositeKey},
-		"data": &dynamodbtypes.AttributeValueMemberM{
-			Value: map[string]dynamodbtypes.AttributeValue{
-				"content": &dynamodbtypes.AttributeValueMemberS{Value: summary},
-				"title":   &dynamodbtypes.AttributeValueMemberS{Value: title},
-				"path":    &dynamodbtypes.AttributeValueMemberS{Value: path},
-			},
-		},
-	}
+func pushToDynamoDB(data HandleSummaryRequestResponse, summary string, path string) error {
+    compositeKey := fmt.Sprintf("%s#%s", data.Vid, data.Lang)
+    
+    item := map[string]dynamodbtypes.AttributeValue{
+        "id": &dynamodbtypes.AttributeValueMemberS{Value: compositeKey},
+        "data": &dynamodbtypes.AttributeValueMemberM{
+            Value: map[string]dynamodbtypes.AttributeValue{
+                "vid": &dynamodbtypes.AttributeValueMemberS{Value: data.Vid},
+                "title": &dynamodbtypes.AttributeValueMemberS{Value: data.Title},
+                "lang": &dynamodbtypes.AttributeValueMemberS{Value: data.Lang},
+                "status": &dynamodbtypes.AttributeValueMemberS{Value: data.Status},
+                "uploader_id": &dynamodbtypes.AttributeValueMemberS{Value: data.UploaderID},
+                "upload_date": &dynamodbtypes.AttributeValueMemberS{Value: data.UploadDate},
+                "duration": &dynamodbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%f", data.Duration)},
+                "channel_id": &dynamodbtypes.AttributeValueMemberS{Value: data.ChannelID},
+                "category": &dynamodbtypes.AttributeValueMemberS{Value: data.Category},
+                "video_lang": &dynamodbtypes.AttributeValueMemberS{Value: data.VideoLang},
+                "summary": &dynamodbtypes.AttributeValueMemberS{Value: summary},
+                "path": &dynamodbtypes.AttributeValueMemberS{Value: path},
+            },
+        },
+    }
 
-	_, err := dynamoDBClient.PutItem(context.Background(), &dynamodb.PutItemInput{
-		TableName: aws.String(dynamoDBTableName),
-		Item:      item,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to push to DynamoDB: %w", err)
-	}
-
-	fmt.Println("Data pushed to DynamoDB successfully.")
-	return nil
+    _, err := dynamoDBClient.PutItem(context.Background(), &dynamodb.PutItemInput{
+        TableName: aws.String(dynamoDBTableName),
+        Item:     item,
+    })
+    if err != nil {
+        return fmt.Errorf("failed to push to DynamoDB: %w", err)
+    }
+    fmt.Println("Data pushed to DynamoDB successfully.")
+    return nil
 }
+
 
 func parseFields(input string) (string, error) {
     // Regex with (?s) flag to make . match newlines
@@ -373,6 +401,7 @@ func sanitizeSubtitle(subtitle string) string {
 
 func getFromDynamoDb(language string, videoID string) (map[string]string, error) {
     compositeKey := fmt.Sprintf("%s#%s", videoID, language)
+    println("Looking for key:", compositeKey)
     
     result, err := dynamoDBClient.GetItem(context.Background(), &dynamodb.GetItemInput{
         TableName: aws.String(dynamoDBTableName),
@@ -381,41 +410,57 @@ func getFromDynamoDb(language string, videoID string) (map[string]string, error)
         },
     })
     if err != nil {
+        println("DynamoDB GetItem error:", err.Error())
         return nil, fmt.Errorf("failed to get item from DynamoDB: %w", err)
     }
     
     if result.Item == nil {
-        return nil, nil // Item not found
+        println("No item found for key:", compositeKey)
+        return nil, nil
+    }
+
+    // Debug: Print the raw item structure
+    println("Raw DynamoDB item:")
+    for k, v := range result.Item {
+        println("-", k, ":", fmt.Sprintf("%T", v))
+    }
+
+    // Try both possible structures:
+    // 1. Direct attributes (content, title, path at root level)
+    // 2. Nested under "data" attribute
+    
+    if dataAttr, ok := result.Item["data"].(*dynamodbtypes.AttributeValueMemberM); ok {
+        contentAttr, ok1 := dataAttr.Value["summary"].(*dynamodbtypes.AttributeValueMemberS)
+        titleAttr, ok2 := dataAttr.Value["title"].(*dynamodbtypes.AttributeValueMemberS)
+        pathAttr, ok3 := dataAttr.Value["path"].(*dynamodbtypes.AttributeValueMemberS)
+		statusAttr, ok4 := dataAttr.Value["status"].(*dynamodbtypes.AttributeValueMemberS)
+        
+        if ok1 && ok2 && ok3 && ok4 {
+            return map[string]string{
+                "content": contentAttr.Value,
+                "title":   titleAttr.Value,
+                "path":    pathAttr.Value,
+				"status":	statusAttr.Value,
+            }, nil
+        }
+        return nil, fmt.Errorf("missing required fields in data attribute")
     }
     
-    dataAttr, ok := result.Item["data"].(*dynamodbtypes.AttributeValueMemberM)
-    if !ok {
-        return nil, fmt.Errorf("invalid data format in DynamoDB item")
-    }
-    
-    contentAttr, ok := dataAttr.Value["content"].(*dynamodbtypes.AttributeValueMemberS)
-    if !ok {
-        return nil, fmt.Errorf("content field missing or invalid")
-    }
-    
-    titleAttr, ok := dataAttr.Value["title"].(*dynamodbtypes.AttributeValueMemberS)
-    if !ok {
-        return nil, fmt.Errorf("title field missing or invalid")
-    }
-    
-    pathAttr, ok := dataAttr.Value["path"].(*dynamodbtypes.AttributeValueMemberS)
-    if !ok {
-        return nil, fmt.Errorf("path field missing or invalid")
-    }
-    
-    return map[string]string{
-        "content": contentAttr.Value,
-        "title":   titleAttr.Value,
-        "path":    pathAttr.Value,
-    }, nil
+    return nil, fmt.Errorf("unrecognized item structure")
 }
 
-
+type HandleSummaryRequestResponse struct {
+	Vid         string  `json:"vid"`
+	Title       string  `json:"title"`
+	Lang        string  `json:"lang"`
+	Status      string  `json:"status"`
+	UploaderID  string  `json:"uploader_id"`
+	UploadDate  string  `json:"upload_date"`
+	Duration    float64 `json:"duration"`
+	ChannelID   string  `json:"channel_id"`
+	Category    string  `json:"category"`
+	VideoLang   string  `json:"video_lang"`
+}
 
 func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
     if r.Method != http.MethodPost {
@@ -452,7 +497,33 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         }
 
         cachedData, err := getFromDynamoDb(requestBody.Language, videoID)
+		println("getFromDynamoDb",cachedData["content"], err)
+		if err != nil {
+			println("Error fetching from DynamoDB:", err.Error())
+		}
+
+		println("cachedData status", cachedData["status"])
+		if cachedData["status"] == "processing" {
+			response := GPTResponseToJson{
+                Title:   cachedData["title"],
+                Vid:     videoID,
+                Content: "",
+                Lang:    requestBody.Language,
+                Answer:  "",
+                Path:    cachedData["path"],
+                Status:  cachedData["status"], // Add status field
+            }
+			w.Header().Set("Content-Type", "application/json")
+            json.NewEncoder(w).Encode(response)
+            return
+		}
+		if cachedData != nil {
+			println("CACHED DATA - Title:", cachedData["title"])
+			println("CACHED DATA - Content:", cachedData["content"])
+			println("CACHED DATA - Path:", cachedData["path"])
+		}
         if err == nil && cachedData != nil {
+			println("CACHED DATA", cachedData)
             // Parse the JSON content from DynamoDB
             var contentData ContentData
             err := json.Unmarshal([]byte(cachedData["content"]), &contentData)
@@ -476,21 +547,38 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
             return
         }
     }
-
+	println("NO CACHED DATA", force)
     // Get basic metadata first (synchronous)
-    title, videoLanguage, videoMetadataErr := getVideoMetadata(videoURL)
+    title, videoLanguage, uploaderID, uploadDate, duration, channelID, category, videoMetadataErr := getVideoMetadata(videoURL)
     if videoMetadataErr != nil {
         http.Error(w, fmt.Sprintf("Error fetching video metadata: %v", videoMetadataErr), http.StatusInternalServerError)
         return
     }
 
-    // Immediate response with processing status
-    initialResponse := GPTResponseToJson{
-        Vid:     videoID,
-        Title:   title,
-        Lang:    requestBody.Language,
-        Status:  "processing",
+	
+
+    // Immediate response with processing status including all metadata
+    initialResponse := HandleSummaryRequestResponse{
+        Vid:         videoID,
+        Title:       title,
+        Lang:        requestBody.Language,
+        Status:      "processing",
+        UploaderID:  uploaderID,
+        UploadDate:  uploadDate,
+        Duration:    duration,
+        ChannelID:   channelID,
+        Category:    category,
+        VideoLang:   videoLanguage,
     }
+	path := convertTitleToURL(title)
+	if err := pushToDynamoDB(
+		initialResponse,
+		"",  
+		path,
+	); err != nil {
+		http.Error(w, fmt.Sprintf("Error pushing to DynamoDB: %v", err), http.StatusInternalServerError)
+		return
+	}
 
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(initialResponse)
@@ -508,12 +596,12 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
             }
 
             subtitleSanitized = sanitizeSubtitle(subtitle)
-            
+
             if err := uploadToS3(subtitleSanitized, subtitleKey); err != nil {
                 log.Printf("Error uploading subtitle to S3: %v\n", err)
             }
         }
-        
+
         summary, err := summarizeText(subtitleSanitized, requestBody.Language, title)
         if err != nil {
             log.Printf("Error summarizing caption: %v\n", err)
@@ -527,11 +615,19 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         }
 
         path := convertTitleToURL(title)
-        if err := pushToDynamoDB(videoID, requestBody.Language, title, sanitizedSummary, path); err != nil {
-            log.Printf("Error pushing to DynamoDB: %v\n", err)
-        }
+		processedResponse := initialResponse
+		processedResponse.Status = "done"
+        if err := pushToDynamoDB(
+			processedResponse,
+			sanitizedSummary,
+			path,
+		); err != nil {
+			http.Error(w, fmt.Sprintf("Error pushing to DynamoDB: %v", err), http.StatusInternalServerError)
+			return
+		}
     }()
 }
+    
 
 // Update your GPTResponseToJson struct to include Status field
 type GPTResponseToJson struct {
