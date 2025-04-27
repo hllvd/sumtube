@@ -434,6 +434,9 @@ func getFromDynamoDb(language string, videoID string) (map[string]string, error)
         titleAttr, ok2 := dataAttr.Value["title"].(*dynamodbtypes.AttributeValueMemberS)
         pathAttr, ok3 := dataAttr.Value["path"].(*dynamodbtypes.AttributeValueMemberS)
 		statusAttr, ok4 := dataAttr.Value["status"].(*dynamodbtypes.AttributeValueMemberS)
+		uploaderIdAttr, _ := dataAttr.Value["uploader_id"].(*dynamodbtypes.AttributeValueMemberS)
+		uploadDateAttr, _ := dataAttr.Value["upload_date"].(*dynamodbtypes.AttributeValueMemberS)
+		durationAttr, _ := dataAttr.Value["duration"].(*dynamodbtypes.AttributeValueMemberN)
         
         if ok1 && ok2 && ok3 && ok4 {
             return map[string]string{
@@ -441,6 +444,9 @@ func getFromDynamoDb(language string, videoID string) (map[string]string, error)
                 "title":   titleAttr.Value,
                 "path":    pathAttr.Value,
 				"status":	statusAttr.Value,
+				"uploaderId" : uploaderIdAttr.Value,
+				"uploadDate" : uploadDateAttr.Value,
+				"duration" : durationAttr.Value,
             }, nil
         }
         return nil, fmt.Errorf("missing required fields in data attribute")
@@ -512,6 +518,9 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
                 Answer:  "",
                 Path:    cachedData["path"],
                 Status:  cachedData["status"], // Add status field
+				UploaderID: cachedData["uploaderId"],
+				UploadDate: cachedData["uploadDate"],
+				Duration: cachedData["duration"],
             }
 			w.Header().Set("Content-Type", "application/json")
             json.NewEncoder(w).Encode(response)
@@ -540,6 +549,9 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
                 Answer:  contentData.Answer,
                 Path:    cachedData["path"],
                 Status:  "completed", // Add status field
+				UploaderID: cachedData["uploaderId"],
+				UploadDate: cachedData["uploadDate"],
+				Duration: cachedData["duration"],
             }
 
             w.Header().Set("Content-Type", "application/json")
@@ -638,6 +650,9 @@ type GPTResponseToJson struct {
     Answer  string `json:"answer,omitempty"`
     Path    string `json:"path,omitempty"`
     Status  string `json:"status"` // Mandatory field
+	UploaderID string `json:"uploader_id"`
+	UploadDate string `json:"upload_date"`
+	Duration string `json:"duration"`
 }
 // Handle Google OAuth2 redirect
 func handleGoogleRedirect(w http.ResponseWriter, r *http.Request) {
