@@ -25,7 +25,10 @@ case $action in
         # Start Docker Compose
         docker-compose up -d --build
         ;;
-        
+    "log")
+        echo "Restarting containers and showing logs..."
+        ./start.sh down && ./start.sh up && docker-compose logs --tail=20 -f -t
+        ;;    
     "down")
         echo "Stopping and removing containers..."
         docker-compose down
