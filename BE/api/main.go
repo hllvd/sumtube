@@ -643,16 +643,16 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 
 // Update your GPTResponseToJson struct to include Status field
 type GPTResponseToJson struct {
-    Title   string `json:"title"`
+    Title   string `json:"title,omitempty"`
     Vid     string `json:"videoId"`
     Content string `json:"content,omitempty"`
     Lang    string `json:"lang"`
     Answer  string `json:"answer,omitempty"`
     Path    string `json:"path,omitempty"`
     Status  string `json:"status"` // Mandatory field
-	UploaderID string `json:"uploader_id"`
-	UploadDate string `json:"upload_date"`
-	Duration string `json:"duration"`
+	UploaderID string `json:"uploader_id,omitempty"`
+	UploadDate string `json:"upload_date,omitempty"`
+	Duration string `json:"duration,omitempty"`
 }
 // Handle Google OAuth2 redirect
 func handleGoogleRedirect(w http.ResponseWriter, r *http.Request) {
