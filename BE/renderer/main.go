@@ -597,6 +597,8 @@ func main() {
 	// // Start the server
 	// println("Server is running on http://localhost:8081")
 	// http.ListenAndServe(":8081", nil)
+
+	
 	http.HandleFunc("/", router)
 
 	// Start the server
