@@ -8,6 +8,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "incremental": true,
-    "tsBuildInfoFile": ".tscache/tsconfig.app.tsbuildinfo"
+    "tsBuildInfoFile": ".tscache/tsconfig.app.tsbuildinfo",
+    "noEmit": true
   }
 }

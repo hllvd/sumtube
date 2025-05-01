@@ -6,6 +6,7 @@
   ],
   "compilerOptions": {
     "jsx": "react-jsx",
+    "noEmit": true,
     "module": "ESNext",
     "moduleResolution": "Node",
     "types": ["vite/client"],
