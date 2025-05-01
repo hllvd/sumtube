@@ -1,32 +1,40 @@
 <!DOCTYPE html>
 <html lang="{{if eq .Language "pt"}}pt-br{{else}}{{.Language}}{{end}}">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>YouTube Summarizer</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>YouTube Summarizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100">
+    <nav class="bg-red-600 p-4 text-white flex justify-between items-center">
+      <h1 class="text-xl font-bold">YouTube Summarizer</h1>
+      <button class="bg-white text-red-600 px-4 py-2 rounded">Login</button>
+    </nav>
 
-  <script>
-    window.apiUrl = "{{.ApiUrl}}";
-    window.lang = "{{.Language}}";
-  </script>
-</head>
-<body class="bg-gray-100">
-  <nav class="bg-red-600 p-4 text-white flex justify-between items-center">
-    <h1 class="text-xl font-bold">YouTube Summarizer</h1>
-    <button class="bg-white text-red-600 px-4 py-2 rounded">Login</button>
-  </nav>
+    <div class="max-w-2xl mx-auto mt-16 text-center">
+      <h2 class="text-3xl font-bold">Summarize Any YouTube Video</h2>
+      <p class="text-gray-600 mt-2">
+        Enter a YouTube video URL and get an AI-generated summary.
+      </p>
 
-  <div id="react-root" class="max-w-2xl mx-auto mt-16 text-center"
-    data-api-url="{{.ApiUrl}}"
-    data-language="{{.Language}}">
-    <!-- React will mount here -->
-    <h2 class="text-3xl font-bold">Summarize Any YouTube Video</h2>
-    <p class="text-gray-600 mt-2">
-      Enter a YouTube video URL and get an AI-generated summary.
-    </p>
-  </div>
+      <!-- React form mounts here -->
+      <div id="react-root" class="mt-6 flex items-center justify-center gap-2 w-full">
+        <!-- React replaces this block -->
+      </div>
+    </div>
 
-  <script type="module" src="/static/app.js"></script> <!-- Vite/React bundle -->
-</body>
+    <footer class="mt-16 text-center text-gray-500 text-sm">
+      <p>&copy; 2025 YouTube Summarizer. All rights reserved.</p>
+      <div class="mt-2">
+        <span class="cursor-pointer hover:underline">EN</span> |
+        <span class="cursor-pointer hover:underline">PT</span> |
+        <span class="cursor-pointer hover:underline">FR</span> |
+        <span class="cursor-pointer hover:underline">ES</span> |
+        <span class="cursor-pointer hover:underline">IT</span>
+      </div>
+    </footer>
+
+    <script type="module" src="/static/app.js"></script>
+  </body>
 </html>

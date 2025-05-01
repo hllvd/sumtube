@@ -1,13 +1,9 @@
-import { StrictMode } from "react"
-import { createRoot } from "react-dom/client"
-import App from "./App"
-import "./index.css"
+import React from "react"
+import ReactDOM from "react-dom/client"
+import YTSummarizerComponent from "./YTSummarizerComponent"
 
-const el = document.getElementById("react-root")
-if (el) {
-  createRoot(el).render(
-    <StrictMode>
-      <App />
-    </StrictMode>
-  )
-}
+ReactDOM.createRoot(document.getElementById("react-root")!).render(
+  <React.StrictMode>
+    <YTSummarizerComponent />
+  </React.StrictMode>
+)
