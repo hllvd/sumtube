@@ -26,6 +26,8 @@ Cargo.lock
 
 **/.tscache/
 
-**/static/**.css
-**/static/**.map
+**/static/**/*.css
+**/static/**/*.map
+**/static/**/*.js.map
+**/static/**/*.js
 **/static/**.js
