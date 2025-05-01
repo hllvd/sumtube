@@ -40,8 +40,8 @@ function YTSummarizerComponent() {
     if (!videoId) return alert("Invalid YouTube URL")
 
     setIsLoading(true)
-    const language =
-      new URLSearchParams(window.location.search).get("lang") || "en"
+    const root = document.getElementById("react-root")
+    const language = root?.dataset.lang || "en"
     fetchSummary(videoId, language)
   }
 
