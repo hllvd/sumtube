@@ -28,6 +28,4 @@ Cargo.lock
 
 **/static/**/*.css
 **/static/**/*.map
-**/static/**/*.js.map
 **/static/**/*.js
-**/static/**.js
