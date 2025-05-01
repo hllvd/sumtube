@@ -16,7 +16,9 @@
     "noFallthroughCasesInSwitch": true,
     "moduleResolution": "Node",
     "types": ["vite/client"],
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "incremental": true,
+    "tsBuildInfoFile": ".tscache/tsconfig.node.tsbuildinfo"
   },
   "include": ["vite.config.ts"]
 }

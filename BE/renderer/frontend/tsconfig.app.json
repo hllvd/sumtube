@@ -6,6 +6,8 @@
     "strict": true,
     "jsx": "react-jsx", // <- ESSENCIAL
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "incremental": true,
+    "tsBuildInfoFile": ".tscache/tsconfig.app.tsbuildinfo"
   }
 }
