@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/gomarkdown/markdown"
@@ -297,6 +298,20 @@ func ConvertMarkdownToHTML(md string) string {
 	return string(markdown.Render(doc, renderer))
 }
 
+func parseDurationToMinutes(raw string) int {
+    seconds, err := strconv.Atoi(strings.TrimSpace(raw))
+    if err != nil {
+        return 0
+    }
+
+    minutes := seconds / 60
+    if seconds%60 > 30 {
+        minutes += 1
+    }
+    return minutes
+}
+
+
 // LoadContent handles the HTTP request for video content
 func (c *LoadController) LoadContent(w http.ResponseWriter, r *http.Request) {
     println("HandleLoad")
@@ -451,15 +466,11 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string) {
 // Example URL: /en/my-video-title/dQw4w9WgXcQ
 // When parsing the template, create a FuncMap and add it to the template:
 func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId string) {
-    // Create a template function map
     funcMap := template.FuncMap{
         "ConvertMarkdownToHTML": ConvertMarkdownToHTML,
     }
 
-    // Create a new template with the function map
     tmpl := template.New("blog.html").Funcs(funcMap)
-    
-    // Parse the template file
     tmpl, err := tmpl.ParseFS(templateFS, filepath.Join("templates", "blog.html"))
     if err != nil {
         http.Error(w, fmt.Sprintf("Error loading template: %v", err), http.StatusInternalServerError)
@@ -471,33 +482,59 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
     }
-    
-    // Extract properties from the response
+
+    // Extração de dados da resposta
     content := result["content"].(string)
     answer := result["answer"].(string)
     contentTitle := result["title"].(string)
+    uploaderId := result["uploader_id"].(string)
 
-    data := struct {
-        Language    string
-        Path       string
-        ApiUrl     string
-		BaseUrl    string
-        VideoId    string
-        Title      string
-        Content    template.HTML
-        Answer     template.HTML
-    }{
-        Language:    lang,
-        Path:       r.URL.Path,
-        ApiUrl:     os.Getenv("SUMTUBE_API"),
-		BaseUrl: 	os.Getenv("BASE_URL"),
-        VideoId:    videoId,
-        Title:      contentTitle,
-        Content:    template.HTML(ConvertMarkdownToHTML(content)),  // Convert the string to template.HTML
-        Answer:     template.HTML(ConvertMarkdownToHTML(answer)),
+    uploadDate := ""
+    if date, ok := result["upload_date"].(string); ok && date != "" {
+        uploadDate = formatDate(lang, date)
     }
 
-    // Execute the template with the data
+    // Duração do vídeo (string tipo "PT15M22S", "15:22" etc.)
+    rawDuration, _ := result["duration"].(string)
+    videoDurationMinutes := parseDurationToMinutes(rawDuration)
+    readingTimeMinutes := 5
+    timeSaved := videoDurationMinutes - readingTimeMinutes
+    if timeSaved < 0 {
+        timeSaved = 0
+    }
+
+    data := struct {
+        Language             string
+        Path                 string
+        ApiUrl               string
+        BaseUrl              string
+        VideoId              string
+        Title                string
+        UploadId             string
+        UploadDate           string
+        Duration             string
+        VideoDurationMinutes int
+        ReadingTimeMinutes   int
+        TimeSavedMinutes     int
+        Content              template.HTML
+        Answer               template.HTML
+    }{
+        Language:             lang,
+        Path:                 r.URL.Path,
+        ApiUrl:               os.Getenv("SUMTUBE_API"),
+        BaseUrl:              os.Getenv("BASE_URL"),
+        VideoId:              videoId,
+        Title:                contentTitle,
+        UploadId:             uploaderId,
+        UploadDate:           uploadDate,
+        Duration:             rawDuration,
+        VideoDurationMinutes: videoDurationMinutes,
+        ReadingTimeMinutes:   readingTimeMinutes,
+        TimeSavedMinutes:     timeSaved,
+        Content:              template.HTML(ConvertMarkdownToHTML(content)),
+        Answer:               template.HTML(ConvertMarkdownToHTML(answer)),
+    }
+
     w.Header().Set("Content-Type", "text/html")
     err = tmpl.Execute(w, data)
     if err != nil {
@@ -505,6 +542,45 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
     }
 }
 
+// formatDate formats a date string based on language
+func formatDate(lang, dateStr string) string {
+	if len(dateStr) != 8 {
+		return dateStr
+	}
+
+	year := dateStr[:4]
+	month := dateStr[4:6]
+	day := dateStr[6:8]
+
+	monthInt, err := strconv.Atoi(month)
+	if err != nil {
+		return dateStr
+	}
+
+	var monthName string
+	switch lang {
+	case "pt":
+		months := []string{"", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+			"Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"}
+		monthName = months[monthInt]
+		return fmt.Sprintf("%s de %s de %s", day, monthName, year)
+	case "es":
+		months := []string{"", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+			"Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"}
+		monthName = months[monthInt]
+		return fmt.Sprintf("%s de %s de %s", day, monthName, year)
+	case "it":
+		months := []string{"", "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
+			"Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"}
+		monthName = months[monthInt]
+		return fmt.Sprintf("%s %s %s", day, monthName, year)
+	default: // en
+		months := []string{"", "January", "February", "March", "April", "May", "June",
+			"July", "August", "September", "October", "November", "December"}
+		monthName = months[monthInt]
+		return fmt.Sprintf("%s %s, %s", monthName, day, year)
+	}
+}
 
 
 // loadSummy handles the summary page
