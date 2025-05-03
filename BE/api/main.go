@@ -131,9 +131,32 @@ func convertTitleToURL(title string) string {
 
 func downloadSubtitle(videoURL string, lang string) (string, error) {
 	videoID, err := extractVideoID(videoURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to extract video ID: %w", err)
+	}
 	outputTemplate := filepath.Join(tempDir, "%(id)s.%(ext)s")
 
-	fmt.Println("Downloading subtitles using yt-dlp...")
+	// First try with the requested language
+	fmt.Printf("Attempting to download subtitles in language '%s'...\n", lang)
+	subtitle, err := tryDownloadSubtitle(videoURL, videoID, outputTemplate, lang)
+	if err == nil {
+		return subtitle, nil
+	}
+
+	// If the first attempt failed and the requested language wasn't English, try with English
+	if lang != "en" {
+		fmt.Printf("Failed to download subtitles in language '%s', trying English instead...\n", lang)
+		subtitle, err = tryDownloadSubtitle(videoURL, videoID, outputTemplate, "en")
+		if err == nil {
+			return subtitle, nil
+		}
+	}
+
+	// If both attempts failed, return the original error
+	return "", fmt.Errorf("failed to download subtitles in either '%s' or 'en': %w", lang, err)
+}
+
+func tryDownloadSubtitle(videoURL, videoID, outputTemplate, lang string) (string, error) {
 	cmd := exec.Command("yt-dlp",
 		"--skip-download",
 		"--write-auto-sub",
@@ -150,7 +173,6 @@ func downloadSubtitle(videoURL string, lang string) (string, error) {
 	}
 
 	searchQuery := fmt.Sprintf("%s*.vtt", videoID)
-	fmt.Println("searchQuery : ", searchQuery)
 	subtitleFilePath := filepath.Join(tempDir, searchQuery)
 	files, err := filepath.Glob(subtitleFilePath)
 	if err != nil {
@@ -162,13 +184,11 @@ func downloadSubtitle(videoURL string, lang string) (string, error) {
 	}
 
 	subtitleFilePath = files[0]
-	fmt.Println("Reading subtitle file:", subtitleFilePath)
 	data, err := ioutil.ReadFile(subtitleFilePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to read subtitle file: %w", err)
 	}
 
-	//fmt.Println("data : ", string(data))
 	return string(data), nil
 }
 
