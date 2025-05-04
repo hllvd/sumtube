@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/gomarkdown/markdown"
 	"github.com/gomarkdown/markdown/html"
@@ -312,6 +313,21 @@ func parseDurationToMinutes(raw string) int {
 }
 
 
+func CountWordsAndReadingTime(text string) (int, int) {
+	words := strings.FieldsFunc(text, func(r rune) bool {
+		return unicode.IsSpace(r) || unicode.IsPunct(r)
+	})
+
+	wordCount := len(words)
+	minutes := wordCount / 200
+	if wordCount%200 > 0 {
+		minutes++ // round up partial minutes
+	}
+
+	return wordCount, minutes
+}
+
+
 // LoadContent handles the HTTP request for video content
 func (c *LoadController) LoadContent(w http.ResponseWriter, r *http.Request) {
     println("HandleLoad")
@@ -497,7 +513,7 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
     // Duração do vídeo (string tipo "PT15M22S", "15:22" etc.)
     rawDuration, _ := result["duration"].(string)
     videoDurationMinutes := parseDurationToMinutes(rawDuration)
-    readingTimeMinutes := 5
+    _, readingTimeMinutes := CountWordsAndReadingTime(content)
     timeSaved := videoDurationMinutes - readingTimeMinutes
     if timeSaved < 0 {
         timeSaved = 0
