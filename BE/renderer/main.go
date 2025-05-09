@@ -93,66 +93,11 @@ func langHandle(w http.ResponseWriter, r *http.Request) string {
 	return "en"
 }
 
-
-func extractVideoId(path string) (string, bool) {
-    var (
-        videoIDRegex = regexp.MustCompile(`^[a-zA-Z0-9\-_]{11}$`)
-        youtubeRegex = regexp.MustCompile(`(?i)(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/|youtube\.com/v/|www\.youtube\.com/watch\?v=)([a-zA-Z0-9\-_]{11})`)
-    )
-
-    // Parse the URL to handle both path and query parameters
-    parsedURL, err := url.Parse(path)
-    if err != nil {
-        return "", false
-    }
-
-	println("decodedPathWithParameters",path)
-
-    // Combine path and query parameters for full URL handling
-    decodedPathWithParameters := parsedURL.Path
-    if parsedURL.RawQuery != "" {
-        decodedPathWithParameters += "?" + parsedURL.RawQuery
-    }
-	
-    // URL decode the combined path and parameters
-    decodedPathWithParameters, err = url.PathUnescape(strings.Trim(decodedPathWithParameters, "/"))
-    if err != nil {
-        decodedPathWithParameters = strings.Trim(path, "/")
-    }
-
-    // First try to extract from YouTube URLs
-    if match := youtubeRegex.FindStringSubmatch(decodedPathWithParameters); len(match) > 1 {
-        if videoIDRegex.MatchString(match[1]) {
-            return match[1], true
-        }
-    }
-
-    // Handle non-URL paths
-    parts := strings.Split(decodedPathWithParameters, "/")
-    for _, part := range parts {
-        // Direct video ID (standalone or at the end of path)
-        if len(part) == 11 && videoIDRegex.MatchString(part) {
-            return part, true
-        }
-        // Video title with ID suffix (title-{videoId})
-        if len(part) > 12 && strings.Contains(part, "-") {
-            splitPart := strings.Split(part, "-")
-            lastSegment := splitPart[len(splitPart)-1]
-            if len(lastSegment) == 11 && videoIDRegex.MatchString(lastSegment) {
-                return lastSegment, true
-            }
-        }
-    }
-
-    // Check if the last segment is a video ID in a path like /lang/title/videoId
-    if len(parts) >= 3 {
-        lastSegment := parts[len(parts)-1]
-        if len(lastSegment) == 11 && videoIDRegex.MatchString(lastSegment) {
-            return lastSegment, true
-        }
-    }
-
-    return "", false
+func extractVideoId(segments []string) string {
+	if len(segments) >= 2 {
+		return segments[1]
+	}
+	return ""
 }
 
 
@@ -188,65 +133,34 @@ func extractYouTubeIFromYoutubeUrl(rawURL string) (string, bool) {
 	return "", false
 }
 
-func extractTitle(path string) (string, bool) {
-	var (
-		youtubeRegex = regexp.MustCompile(`(?i)(youtube\.com/watch|youtu\.be|youtube\.com/embed|youtube\.com/v|www\.youtube\.com/watch)`)
-		videoIDRegex = regexp.MustCompile(`^[a-zA-Z0-9\-_]{11}$`)
-	)
-		// URL decode the path first
-		decodedPath, err := url.PathUnescape(strings.Trim(path, "/"))
-		if err != nil {
-			decodedPath = strings.Trim(path, "/")
-		}
-	
-		// Check if this is any YouTube URL pattern
-		if youtubeRegex.MatchString(decodedPath) {
-			return "", false
-		}
-	
-		parts := strings.Split(decodedPath, "/")
-	
-		// Case 1: /{lang}/{title}-{videoId}
-		if len(parts) == 2 && strings.Contains(parts[1], "-") {
-			subparts := strings.Split(parts[1], "-")
-			// Check if last segment is a video ID
-			if len(subparts) > 1 && videoIDRegex.MatchString(subparts[len(subparts)-1]) {
-				return strings.Join(subparts[:len(subparts)-1], "-"), true
-			}
-			return parts[1], true
-		}
-	
-		// Case 2: /{lang}/{title}/{videoId}
-		if len(parts) >= 3 {
-			title := parts[len(parts)-2]
-			if title == "" {
-				return "", false
-			}
-			return title, true
-		}
-	
-		// Case 3: /{lang}/{title} (no video ID)
-		if len(parts) == 2 {
-			// Check if the second part is actually a video ID
-			if videoIDRegex.MatchString(parts[1]) {
-				return "", false
-			}
-			return parts[1], true
-		}
-	
-		// Case 4: /{title}-{videoId} (no language)
-		if len(parts) == 1 && strings.Contains(parts[0], "-") {
-			subparts := strings.Split(parts[0], "-")
-			// Check if last segment is a video ID
-			if len(subparts) > 1 && videoIDRegex.MatchString(subparts[len(subparts)-1]) {
-				return strings.Join(subparts[:len(subparts)-1], "-"), true
-			}
-			return parts[0], true
-		}
-	
-		return "", false
+func extractTitle(segments []string) string {
+	if len(segments) >= 3 {
+		return segments[2]
 	}
+	return ""
+}
 
+    // ReplaceMarkdownTimestamps takes a YouTube video ID and markdown content,
+// and replaces [Text](hh:mm:ss) links with [Text](https://youtu.be/VIDEO_ID?t=SECONDS)
+func ReplaceMarkdownTimestamps(videoID string, content string) string {
+	re := regexp.MustCompile(`\[(.*?)\]\((\d{2}):(\d{2}):(\d{2})\)`)
+	return re.ReplaceAllStringFunc(content, func(match string) string {
+		parts := re.FindStringSubmatch(match)
+		if len(parts) != 5 {
+			return match // safety fallback
+		}
+
+		text := parts[1]
+		hours, _ := strconv.Atoi(parts[2])
+		minutes, _ := strconv.Atoi(parts[3])
+		seconds, _ := strconv.Atoi(parts[4])
+		totalSeconds := hours*3600 + minutes*60 + seconds
+
+		newLink := fmt.Sprintf("[%s](https://youtu.be/%s?t=%d)", text, videoID, totalSeconds)
+		return newLink
+	})
+}
+    
 // GetVideoContent fetches content from the API for a given video ID and language
 func GetVideoContent(videoID, lang string) (map[string]interface{}, error) {
     // Prepare the payload
@@ -336,11 +250,8 @@ func (c *LoadController) LoadContent(w http.ResponseWriter, r *http.Request) {
     // Extract user's lang
     language := langHandle(w, r)
 
-    videoID, isVideoID := extractVideoId(path)
-    if !isVideoID {
-        http.Error(w, "Invalid YouTube ID", http.StatusBadRequest)
-        return
-    }
+    segments, _ := splitURLPath(path)
+    videoID := extractVideoId(segments)
 
     println("HandleLoad videoID: ", videoID)
     println("HandleLoad language: ", language)
@@ -372,6 +283,78 @@ func (c *LoadController) LoadContent(w http.ResponseWriter, r *http.Request) {
     json.NewEncoder(w).Encode(response)
 }
 
+func splitURLPath(rawURL string) ([]string, error) {
+	// Ensure it has a scheme so url.Parse works properly
+	u, err := url.ParseRequestURI("https://example.com" + rawURL)
+	if err != nil {
+		return nil, err
+	}
+
+	// Split path and filter out empty segments
+	segments := strings.Split(u.Path, "/")
+	var parts []string
+	for _, segment := range segments {
+		if segment != "" {
+			parts = append(parts, segment)
+		}
+	}
+
+	return parts, nil
+}
+
+type RouteType int
+
+const (
+	UNKNOWN RouteType = iota
+	BLOG_TEMPLATE
+	REDIRECT_HOME
+	REDIRECT_BLOG_HOME
+	HOME
+)
+
+func (rt RouteType) String() string {
+	return [...]string{"UNKNOWN", "BLOG_TEMPLATE", "REDIRECT_HOME", "REDIRECT_BLOG_HOME", "HOME"}[rt]
+}
+
+func isVideoID(s string) bool {
+    // videoId do YouTube: 11 caracteres, letras, números, hífen e underscore
+    var videoIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{11}$`)
+	return videoIDPattern.MatchString(s)
+}
+
+func isLikelyTitle(s string) bool {
+	return strings.Contains(s, "-") && !isVideoID(s)
+}
+
+// check if the route type based on URL
+func GetRouteType(segments []string) RouteType {
+	n := len(segments)
+
+	if n == 1 {
+		if allowedLanguages[segments[0]] {
+			return HOME
+		} else if isVideoID(segments[0]) {
+			return REDIRECT_BLOG_HOME
+		}
+	} else if n == 2 {
+		lang, second := segments[0], segments[1]
+		if allowedLanguages[lang] && isVideoID(second) {
+			return REDIRECT_BLOG_HOME
+		}
+	} else if n == 3 {
+		lang, first, second := segments[0], segments[1], segments[2]
+		if allowedLanguages[lang] {
+			if isVideoID(first) && isLikelyTitle(second) {
+				return BLOG_TEMPLATE
+			}
+			if isLikelyTitle(first) && isVideoID(second) {
+				return REDIRECT_HOME
+			}
+		}
+	}
+	return REDIRECT_HOME
+}
+
 // Router function to delegate requests to the appropriate controller
 func router(w http.ResponseWriter, r *http.Request) {
     pathWithParam := strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "https://"), "http://")
@@ -379,70 +362,113 @@ func router(w http.ResponseWriter, r *http.Request) {
         pathWithParam += "?" + r.URL.RawQuery
     }
 	pathWithParamHasYoutube := strings.Contains(pathWithParam, "https://")
+
+    pathSegments, err := splitURLPath(pathWithParam)
+
+	if err != nil {
+        http.Error(w, fmt.Sprintf("Error: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+    routeType := GetRouteType(pathSegments)
+    println("routeType: ", routeType)
+
     
     // Extract components
-    lang, langOk := extractLang(pathWithParam)
-    title, titleOk := extractTitle(pathWithParam)
-    videoId, videoOk := extractVideoId(pathWithParam)
+    lang, _ := extractLang(pathWithParam)
+    title := extractTitle(pathSegments)
+    videoId := extractVideoId(pathSegments)
 
 	langHandled := langHandle(w, r)
 
+    switch routeType {
+        case BLOG_TEMPLATE:
+            loadBlog(w, r, lang, title, videoId)
+        
+        case REDIRECT_BLOG_HOME:
+            result, err := GetVideoContent(videoId, langHandled)
+            // Go do Blog
+            if err == nil {
+                status := result["status"].(string)
+                path := result["path"].(string)
+                if (status == "completed"){
+                    newPath := fmt.Sprintf("/%s%s%", langHandled, videoId, path)
+                    redirectURL := &url.URL{
+                        Path:     newPath,
+                        RawQuery: r.URL.RawQuery,
+                    }
+                    http.Redirect(w, r, redirectURL.String(), http.StatusMovedPermanently)
+                }
+            }
+            
+            // Go to Home
+            newPath := fmt.Sprintf("/%s%s", langHandled, videoId)
+            redirectURL := &url.URL{
+                Path:     newPath,
+                RawQuery: r.URL.RawQuery,
+            }
+            http.Redirect(w, r, redirectURL.String(), http.StatusMovedPermanently)
+        case REDIRECT_HOME:
+            newPath := fmt.Sprintf("/%s", langHandled)
+            redirectURL := &url.URL{
+                Path:     newPath,
+            }
+            http.Redirect(w, r, redirectURL.String(), http.StatusMovedPermanently)
+        case HOME:
+            loadIndex(w, r, lang)
+        default:
+            http.Error(w, "Invalid route", http.StatusNotFound)
+	}
 
 	println("pathWithParamHasYoutube : ", pathWithParamHasYoutube)
 
 
     // Route based on extracted components
-    switch {
+    // switch {
 
-	case pathWithParamHasYoutube:
-		// Build the new URL with the language prefix
-        newPath := fmt.Sprintf("/%s%s", langHandled, videoId)
+	// case pathWithParamHasYoutube:
+	// 	// Build the new URL with the language prefix
         
-        // Create the redirect URL, preserving any query parameters
-        redirectURL := &url.URL{
-            Path:     newPath,
-            RawQuery: r.URL.RawQuery,
-        }
         
-        // Perform the redirect
-        http.Redirect(w, r, redirectURL.String(), http.StatusMovedPermanently)
-		return
+    //     // Perform the redirect
+    //     http.Redirect(w, r, redirectURL.String(), http.StatusMovedPermanently)
+	// 	return
 
-	// Case 1: If lang does not exist please check the value from langHandled and redirect the user to
-	// domain.com/{lang}/the current path already introduced by the user
-    case !langOk:
-        // Build the new URL with the language prefix
-        newPath := fmt.Sprintf("/%s%s", langHandled, pathWithParam)
+	// // Case 1: If lang does not exist please check the value from langHandled and redirect the user to
+	// // domain.com/{lang}/the current path already introduced by the user
+    // case !langOk:
+    //     // Build the new URL with the language prefix
+    //     newPath := fmt.Sprintf("/%s%s", langHandled, pathWithParam)
         
-        // Create the redirect URL, preserving any query parameters
-        redirectURL := &url.URL{
-            Path:     newPath,
-            RawQuery: r.URL.RawQuery,
-        }
+    //     // Create the redirect URL, preserving any query parameters
+    //     redirectURL := &url.URL{
+    //         Path:     newPath,
+    //         RawQuery: r.URL.RawQuery,
+    //     }
         
-        // Perform the redirect
-        http.Redirect(w, r, redirectURL.String(), http.StatusMovedPermanently)
-        return
+    //     // Perform the redirect
+    //     http.Redirect(w, r, redirectURL.String(), http.StatusMovedPermanently)
+    //     return
 	
 
 	
 	// Case 2: Only language exists - load index
-    case langOk && !titleOk && !videoOk:
-		println("Case 2: Only language exists - load index :",videoOk, videoId)
-        loadIndex(w, r, lang)
+    // case langOk && !titleOk && !videoOk:
+	// 	println("Case 2: Only language exists - load index :",videoOk, videoId)
+    //     loadIndex(w, r, lang)
         
-    // Case 3: Language, title, and video ID exist - load blog
-    case langOk && titleOk && videoOk:
-        loadBlog(w, r, lang, title, videoId)
+    // // Case 3: Language, title, and video ID exist - load blog
+    // case langOk && titleOk && videoOk:
+    //     loadBlog(w, r, lang, title, videoId)
         
-    // Case 4: Only language and video ID exist or only videoId exist - load summary
-    case videoOk && !titleOk:
-        loadSummary(w, r, videoId, videoId)
+    // // Case 4: Only language and video ID exist or only videoId exist - load summary
+    // case videoOk && !titleOk:
+    //     loadSummary(w, r, videoId, videoId)
         
-    // Default case: Invalid route
-    default:
-        http.Error(w, "Invalid route", http.StatusNotFound)
-    }
+    // // Default case: Invalid route
+    // default:
+    //     http.Error(w, "Invalid route", http.StatusNotFound)
+    // }
 }
 
 
@@ -547,7 +573,7 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
         VideoDurationMinutes: videoDurationMinutes,
         ReadingTimeMinutes:   readingTimeMinutes,
         TimeSavedMinutes:     timeSaved,
-        Content:              template.HTML(ConvertMarkdownToHTML(content)),
+        Content:              template.HTML(ConvertMarkdownToHTML(ReplaceMarkdownTimestamps(videoId, content))),
         Answer:               template.HTML(ConvertMarkdownToHTML(answer)),
     }
 
@@ -597,6 +623,7 @@ func formatDate(lang, dateStr string) string {
 		return fmt.Sprintf("%s %s, %s", monthName, day, year)
 	}
 }
+
 
 
 // loadSummy handles the summary page

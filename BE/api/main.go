@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 	"unicode"
 
 	"context"
@@ -32,6 +33,9 @@ import (
 
 //go:embed prompts/system1.prompt.txt
 var system1PromptTxt string
+
+//go:embed prompts/system2.prompt.txt
+var system2PromptTxt string
 
 //go:embed prompts/user1.prompt.txt
 var user1PromptTxt string
@@ -321,9 +325,59 @@ func listPromptsDir(promptsDir string) error {
 }
 
 
+// ExtractLastTimestamp recebe o conteúdo da legenda e retorna o último timestamp (como string ou time.Duration)
+func ExtractLastTimestamp(content string) (string, error) {
+    re := regexp.MustCompile(`\d{2}:\d{2}:\d{2}\.\d{3} --> (\d{2}:\d{2}:\d{2})\.\d{3}`)
+    matches := re.FindAllStringSubmatch(content, -1)
+
+    if len(matches) == 0 {
+        return "", fmt.Errorf("nenhum timestamp encontrado")
+    }
+
+    // Pega o último timestamp de saída (apenas hh:mm:ss)
+    lastTimestamp := matches[len(matches)-1][1]
+
+    return lastTimestamp, nil
+}
+
+
+// Extra: Se quiser converter para time.Duration
+func ParseTimestampToDuration(ts string) (int, error) {
+    parsed, err := time.Parse("15:04:05", ts)
+    if err != nil {
+        return 0, err
+    }
+    
+    // Calculate total seconds
+    totalSeconds := parsed.Hour()*3600 + parsed.Minute()*60 + parsed.Second()
+    return totalSeconds, nil
+}
+
+
 func summarizeText(caption string, lang string, title string) (string, error) {
 
-    systemPrompt := system1PromptTxt
+	ts, errExtraction := ExtractLastTimestamp(caption)
+	if errExtraction != nil {
+		return "", fmt.Errorf("failed to extract last timestamp: %w", errExtraction)
+	}
+	tsToDuration, errDuration := ParseTimestampToDuration(ts)
+	if errDuration != nil {
+		return "", fmt.Errorf("failed to parse timestamp to duration: %w", errDuration)
+	}
+
+	println("ts",ts)
+	println("tsToDuration: ", tsToDuration)
+	println("seconds",(20*60))
+	systemPrompt := ""
+	if tsToDuration < (20*60) {
+		systemPrompt = system1PromptTxt
+		println("using prompt: prompt1")
+	}else{
+		systemPrompt = system2PromptTxt
+		println("using prompt: prompt2")
+	}
+
+    
 
     userPromptTemplate := user1PromptTxt
 

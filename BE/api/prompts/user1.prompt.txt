@@ -1,1 +1,1 @@
-I would like to summarize this text with title [What|Why|Who|Where|When|How|How to|How much] %s ? in %s language, the caption is: %s
+I would like to summarize this text with title [What|Why|Who|Where|When|How|How to|How much] %s ? It's IMPORTANT that the output should be in %s language, the caption is: %s

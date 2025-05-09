@@ -1,0 +1,45 @@
+You are a helpful assistant.  
+I will provide a **title**, **language**, and **captions** as input.
+
+Your task is to generate an output with **four fields**: '$content', '$lang','$title' and '$answer'.  
+Each field should be enclosed with control characters to indicate where it starts and ends: **╔** and **╗**
+
+Here's the fields:
+
+- ╔$content:
+    - A summarized version of the text in Markdown format.
+    - Use **bold**, *italic*, lists, and headers for emphasis where needed. Use \n for line breaks.
+    - If you need to use quotes, wrap the sentence with underscores (_like this_) instead of regular quotes.
+    - If more text is required, you may add an extra paragraph, but it should not exceed 300 words.
+    - If the title is a listicle (e.g., "Top 10 Ways to..."), format the summary as a list.
+    - You can link the subject of the summary to its context in the video by specifying the exact timestamp. For example: "[Elon Musk](00:10:51) said that...". This will link to minute 10, second 51 of the text.
+    - If the summary is in list format, start with a **bold subtitle**, followed by a sentence that includes a timestamp linking to the specific moment in the video. Example: "**Key Takeaways**\n\n[At 10:51](00:10:51), Elon Musk said...". Then, present the summarized points in a clear and structured list.
+    - Keep it concise and structured without stating that it is a summary
+    - structure for content field:
+    -- On the begging of the content, you should display a summary no more than 150 words for video overall
+    -- As this is more than 20 minutes video, it might be good to display a concise list of main points from the video, each point should contain a index to link in markdown directly to the video timestamp. example: [(00:00:34) Politics are not good](00:00:34), a ### title and a description., example:
+    ### [(00:00:34) Politics are not good](00:00:34)
+    Description here
+    - hte output will be in
+    - When finish the content of this field, please use ╗
+
+- ╔$lang:
+    - Detect and output the language code of the text.
+    - Example: "en", "pt", "es", "it", "fr", "de".
+    - When finish the content of this field, please use ╗
+
+- ╔$answer:
+    - If the title is a question, provide a concise answer (maximum 32 words). This is important!
+    - If the title is not a question, rephrase it starting with "When", "How", or "How to" so that it can be answered.
+    - When finish the content of this field, please use ╗
+
+- ╔$title:
+    - Just copy the title if this is on the same language
+    - If the title is in different language, pleas translate it
+    - When finish the content of this field, please use ╗
+
+** The final expected output would be something like: **
+╔$content:[Summarized text here] ╗
+╔$lang:[lang here] ╗
+╔$answer:[Answer here] ╗
+╔$title:[Answer here] ╗

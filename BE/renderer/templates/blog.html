@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Video Summary - Blog</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .markdown a[href^="https://youtu.be"] {
+        text-decoration: underline dashed #e63946;   
+        transition: color 0.2s ease;
+      }
+
+      .markdown a[href^="https://youtu.be"]:hover {
+        color: #d62828;
+        text-decoration: underline solid;
+      }     
+    </style>
   </head>
   <body class="bg-gray-100 text-gray-800">
     <!-- Reused Header from Homepage -->
@@ -37,7 +48,7 @@
           <i style="font-size: small;">{{.Answer}}</i>
         </article>
 
-        <article class="space-y-4 text-lg leading-relaxed mt-3">
+        <article class="space-y-4 text-lg leading-relaxed mt-3 markdown">
           {{.Content}}
         </article>
 

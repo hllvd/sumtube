@@ -39,7 +39,7 @@ function YTSummarizerComponent() {
         })
         setTimeout(() => fetchSummary(videoId, language), 3000)
       } else if (data.status === "completed") {
-        window.location.href = `${window.location.origin}/${data.lang}/${data.path}/${data.videoId}`
+        window.location.href = `${window.location.origin}/${data.lang}/${data.videoId}/${data.path}`
       }
     } catch (error) {
       console.error("Error fetching summary:", error)
