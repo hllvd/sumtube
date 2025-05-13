@@ -91,18 +91,19 @@ type VideoMetadata struct {
 	Duration    float64  `json:"duration"`
 	ChannelID   string   `json:"channel_id"`
 	Categories  []string `json:"categories"`
+	LikeCount   int      `json:"like_count"`
 }
 
-func getVideoMetadata(videoURL string) (string, string, string, string, float64, string, string, error) {
+func getVideoMetadata(videoURL string) (string, string, string, string, float64, string, string, int, error) {
 	cmd := exec.Command("yt-dlp", "--dump-json", videoURL)
 	output, err := cmd.Output()
 	if err != nil {
-		return "", "", "", "", 0, "", "", fmt.Errorf("failed to run yt-dlp: %w", err)
+		return "", "", "", "", 0, "", "", 0, fmt.Errorf("failed to run yt-dlp: %w", err)
 	}
 
 	var metadata VideoMetadata
 	if err := json.Unmarshal(output, &metadata); err != nil {
-		return "", "", "", "", 0, "", "", fmt.Errorf("failed to parse metadata: %w", err)
+		return "", "", "", "", 0, "", "", 0, fmt.Errorf("failed to parse metadata: %w", err)
 	}
 
 	// Get first category or empty string if none
@@ -118,6 +119,7 @@ func getVideoMetadata(videoURL string) (string, string, string, string, float64,
 		metadata.Duration,
 		metadata.ChannelID,
 		category,
+		metadata.LikeCount,
 		nil
 }
 
@@ -235,37 +237,74 @@ func fetchS3(key string) (string, error) {
     return string(content), nil
 }
 
-func pushToDynamoDB(data HandleSummaryRequestResponse, summary string, path string) error {
-    compositeKey := fmt.Sprintf("%s#%s", data.Vid, data.Lang)
-    
+func pushSummaryToDynamoDB(data HandleSummaryRequestResponse, summary string, path string) error {
+    // Pad LikeCount to 8 digits for correct lexicographic sort
+    paddedLikeCount := fmt.Sprintf("%08d", data.LikeCount)
+
+    item := map[string]dynamodbtypes.AttributeValue{
+        "PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("VIDEO#%s#LANG#%s", data.Vid, data.Lang)},
+        "SK": &dynamodbtypes.AttributeValueMemberS{Value: "METADATA"},
+
+        // GSI for querying by category and LikeCount
+        "GSI1PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("CATEGORY#%s#LANG#%s", data.Category,data.Lang)},
+        "GSI1SK": &dynamodbtypes.AttributeValueMemberS{
+            Value: fmt.Sprintf("LIKECOUNT#%s#%s#%s", paddedLikeCount, data.Vid, data.Lang),
+        },
+
+        // Main data fields
+        "vid":          &dynamodbtypes.AttributeValueMemberS{Value: data.Vid},
+        "title":        &dynamodbtypes.AttributeValueMemberS{Value: data.Title},
+        "lang":         &dynamodbtypes.AttributeValueMemberS{Value: data.Lang},
+        "status":       &dynamodbtypes.AttributeValueMemberS{Value: data.Status},
+        "uploader_id":  &dynamodbtypes.AttributeValueMemberS{Value: data.UploaderID},
+        "upload_date":  &dynamodbtypes.AttributeValueMemberS{Value: data.UploadDate},
+        "duration":     &dynamodbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%f", data.Duration)},
+        "channel_id":   &dynamodbtypes.AttributeValueMemberS{Value: data.ChannelID},
+        "category":     &dynamodbtypes.AttributeValueMemberS{Value: data.Category},
+        "video_lang":   &dynamodbtypes.AttributeValueMemberS{Value: data.VideoLang},
+        "summary":      &dynamodbtypes.AttributeValueMemberS{Value: summary},
+        "path":         &dynamodbtypes.AttributeValueMemberS{Value: path},
+        "LikeCount":    &dynamodbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%d", data.LikeCount)},
+    }
+
+    _, err := dynamoDBClient.PutItem(context.Background(), &dynamodb.PutItemInput{
+        TableName: aws.String(dynamoDBTableName),
+        Item:      item,
+    })
+    if err != nil {
+        return fmt.Errorf("failed to push to DynamoDB: %w", err)
+    }
+
+    fmt.Println("Data pushed to DynamoDB successfully.")
+    return nil
+}
+
+
+
+func pushCategoryStatsToDynamoDB(categoryName string, likes int, vid string, date string) error {
+    compositeKey := fmt.Sprintf("%s#%d#%s", categoryName, likes, date)
+
     item := map[string]dynamodbtypes.AttributeValue{
         "id": &dynamodbtypes.AttributeValueMemberS{Value: compositeKey},
         "data": &dynamodbtypes.AttributeValueMemberM{
             Value: map[string]dynamodbtypes.AttributeValue{
-                "vid": &dynamodbtypes.AttributeValueMemberS{Value: data.Vid},
-                "title": &dynamodbtypes.AttributeValueMemberS{Value: data.Title},
-                "lang": &dynamodbtypes.AttributeValueMemberS{Value: data.Lang},
-                "status": &dynamodbtypes.AttributeValueMemberS{Value: data.Status},
-                "uploader_id": &dynamodbtypes.AttributeValueMemberS{Value: data.UploaderID},
-                "upload_date": &dynamodbtypes.AttributeValueMemberS{Value: data.UploadDate},
-                "duration": &dynamodbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%f", data.Duration)},
-                "channel_id": &dynamodbtypes.AttributeValueMemberS{Value: data.ChannelID},
-                "category": &dynamodbtypes.AttributeValueMemberS{Value: data.Category},
-                "video_lang": &dynamodbtypes.AttributeValueMemberS{Value: data.VideoLang},
-                "summary": &dynamodbtypes.AttributeValueMemberS{Value: summary},
-                "path": &dynamodbtypes.AttributeValueMemberS{Value: path},
+                "category": &dynamodbtypes.AttributeValueMemberS{Value: categoryName},
+                "likes":    &dynamodbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%d", likes)},
+                "vid":      &dynamodbtypes.AttributeValueMemberS{Value: vid},
+                "date":     &dynamodbtypes.AttributeValueMemberS{Value: date},
             },
         },
     }
 
     _, err := dynamoDBClient.PutItem(context.Background(), &dynamodb.PutItemInput{
         TableName: aws.String(dynamoDBTableName),
-        Item:     item,
+        Item:      item,
     })
     if err != nil {
-        return fmt.Errorf("failed to push to DynamoDB: %w", err)
+        return fmt.Errorf("failed to push category stats to DynamoDB: %w", err)
     }
-    fmt.Println("Data pushed to DynamoDB successfully.")
+
+    fmt.Println("Category stats pushed to DynamoDB successfully.")
     return nil
 }
 
@@ -473,61 +512,27 @@ func sanitizeSubtitle(subtitle string) string {
 }
 
 
-func getFromDynamoDb(language string, videoID string) (map[string]string, error) {
-    compositeKey := fmt.Sprintf("%s#%s", videoID, language)
-    println("Looking for key:", compositeKey)
-    
-    result, err := dynamoDBClient.GetItem(context.Background(), &dynamodb.GetItemInput{
+func getSummaryFromDynamoDB(vid string, lang string) (map[string]dynamodbtypes.AttributeValue, error) {
+    key := map[string]dynamodbtypes.AttributeValue{
+        "PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("VIDEO#%s#LANG#%s", vid, lang)},
+        "SK": &dynamodbtypes.AttributeValueMemberS{Value: "METADATA"},
+    }
+
+    result, err := dynamoDBClient.GetItem(context.TODO(), &dynamodb.GetItemInput{
         TableName: aws.String(dynamoDBTableName),
-        Key: map[string]dynamodbtypes.AttributeValue{
-            "id": &dynamodbtypes.AttributeValueMemberS{Value: compositeKey},
-        },
+        Key:       key,
     })
     if err != nil {
-        println("DynamoDB GetItem error:", err.Error())
         return nil, fmt.Errorf("failed to get item from DynamoDB: %w", err)
     }
-    
+
     if result.Item == nil {
-        println("No item found for key:", compositeKey)
-        return nil, nil
+        return nil, fmt.Errorf("item not found")
     }
 
-    // Debug: Print the raw item structure
-    println("Raw DynamoDB item:")
-    for k, v := range result.Item {
-        println("-", k, ":", fmt.Sprintf("%T", v))
-    }
-
-    // Try both possible structures:
-    // 1. Direct attributes (content, title, path at root level)
-    // 2. Nested under "data" attribute
-    
-    if dataAttr, ok := result.Item["data"].(*dynamodbtypes.AttributeValueMemberM); ok {
-        contentAttr, ok1 := dataAttr.Value["summary"].(*dynamodbtypes.AttributeValueMemberS)
-        titleAttr, ok2 := dataAttr.Value["title"].(*dynamodbtypes.AttributeValueMemberS)
-        pathAttr, ok3 := dataAttr.Value["path"].(*dynamodbtypes.AttributeValueMemberS)
-		statusAttr, ok4 := dataAttr.Value["status"].(*dynamodbtypes.AttributeValueMemberS)
-		uploaderIdAttr, _ := dataAttr.Value["uploader_id"].(*dynamodbtypes.AttributeValueMemberS)
-		uploadDateAttr, _ := dataAttr.Value["upload_date"].(*dynamodbtypes.AttributeValueMemberS)
-		durationAttr, _ := dataAttr.Value["duration"].(*dynamodbtypes.AttributeValueMemberN)
-        
-        if ok1 && ok2 && ok3 && ok4 {
-            return map[string]string{
-                "content": contentAttr.Value,
-                "title":   titleAttr.Value,
-                "path":    pathAttr.Value,
-				"status":	statusAttr.Value,
-				"uploaderId" : uploaderIdAttr.Value,
-				"uploadDate" : uploadDateAttr.Value,
-				"duration" : durationAttr.Value,
-            }, nil
-        }
-        return nil, fmt.Errorf("missing required fields in data attribute")
-    }
-    
-    return nil, fmt.Errorf("unrecognized item structure")
+    return result.Item, nil
 }
+
 
 type HandleSummaryRequestResponse struct {
 	Vid         string  `json:"vid"`
@@ -540,6 +545,7 @@ type HandleSummaryRequestResponse struct {
 	ChannelID   string  `json:"channel_id"`
 	Category    string  `json:"category"`
 	VideoLang   string  `json:"video_lang"`
+	LikeCount 	int	`json:"like_count"`
 }
 
 func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
@@ -576,7 +582,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
             Answer  string `json:"answer"`
         }
 
-        cachedData, err := getFromDynamoDb(requestBody.Language, videoID)
+        cachedData, err := getSummaryFromDynamoDB(videoID, requestBody.Language)
 		println("getFromDynamoDb",cachedData["content"], err)
 		if err != nil {
 			println("Error fetching from DynamoDB:", err.Error())
@@ -635,7 +641,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
     }
 	println("NO CACHED DATA", force)
     // Get basic metadata first (synchronous)
-    title, videoLanguage, uploaderID, uploadDate, duration, channelID, category, videoMetadataErr := getVideoMetadata(videoURL)
+    title, videoLanguage, uploaderID, uploadDate, duration, channelID, category, likeCounter, videoMetadataErr := getVideoMetadata(videoURL)
     if videoMetadataErr != nil {
         http.Error(w, fmt.Sprintf("Error fetching video metadata: %v", videoMetadataErr), http.StatusInternalServerError)
         return
@@ -655,9 +661,10 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         ChannelID:   channelID,
         Category:    category,
         VideoLang:   videoLanguage,
+		LikeCount:   likeCounter,
     }
 	path := convertTitleToURL(title)
-	if err := pushToDynamoDB(
+	if err := pushSummaryToDynamoDB(
 		initialResponse,
 		"",  
 		path,
@@ -703,13 +710,20 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         path := convertTitleToURL(title)
 		processedResponse := initialResponse
 		processedResponse.Status = "done"
-        if err := pushToDynamoDB(
+        if err := pushSummaryToDynamoDB(
 			processedResponse,
 			sanitizedSummary,
 			path,
 		); err != nil {
 			http.Error(w, fmt.Sprintf("Error pushing to DynamoDB: %v", err), http.StatusInternalServerError)
 			return
+		}
+
+		category := initialResponse.Category
+		likeCounter := initialResponse.LikeCount
+		
+		if err := pushCategoryStatsToDynamoDB(category, likeCounter, videoID, summary); err != nil {
+			log.Printf("Failed to push category stats to DynamoDB: %v", err)
 		}
     }()
 }
