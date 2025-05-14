@@ -22,6 +22,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -264,7 +265,7 @@ func pushSummaryToDynamoDB(data HandleSummaryRequestResponse, summary string, pa
         "video_lang":   &dynamodbtypes.AttributeValueMemberS{Value: data.VideoLang},
         "summary":      &dynamodbtypes.AttributeValueMemberS{Value: summary},
         "path":         &dynamodbtypes.AttributeValueMemberS{Value: path},
-        "LikeCount":    &dynamodbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%d", data.LikeCount)},
+        "like_count":    &dynamodbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%d", data.LikeCount)},
     }
 
     _, err := dynamoDBClient.PutItem(context.Background(), &dynamodb.PutItemInput{
@@ -306,6 +307,17 @@ func pushCategoryStatsToDynamoDB(categoryName string, likes int, vid string, dat
 
     fmt.Println("Category stats pushed to DynamoDB successfully.")
     return nil
+}
+
+func parseJSONContent(jsonString string) (map[string]string, error) {
+    var result map[string]string
+    
+    err := json.Unmarshal([]byte(jsonString), &result)
+    if err != nil {
+        return nil, fmt.Errorf("error parsing JSON: %v", err)
+    }
+    
+    return result, nil
 }
 
 
@@ -548,6 +560,20 @@ type HandleSummaryRequestResponse struct {
 	LikeCount 	int	`json:"like_count"`
 }
 
+type DynamoDbResponseToJson struct {
+    Title      string `dynamodbav:"title" json:"title"`
+    Vid        string `dynamodbav:"vid" json:"vid"`
+    Content    string `dynamodbav:"summary" json:"content"`
+	LikeCount  string `dynamodbav:"like_count" json:"like_count"`
+    Lang       string `dynamodbav:"lang" json:"lang"`
+    Answer     string `dynamodbav:"answer" json:"answer"`
+    Path       string `dynamodbav:"path" json:"path"`
+    Status     string `dynamodbav:"status" json:"status"`
+    UploaderID string `dynamodbav:"uploader_id" json:"uploaderId"`
+    UploadDate string `dynamodbav:"upload_date" json:"uploadDate"`
+    Duration   string `dynamodbav:"duration" json:"duration"` // or float64 if needed
+}
+
 func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
     if r.Method != http.MethodPost {
         http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
@@ -583,24 +609,31 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         }
 
         cachedData, err := getSummaryFromDynamoDB(videoID, requestBody.Language)
-		println("getFromDynamoDb",cachedData["content"], err)
+		var dynamoDbResponse DynamoDbResponseToJson
+		dynamoDbResponseErr := attributevalue.UnmarshalMap(cachedData, &dynamoDbResponse)
+		if dynamoDbResponseErr != nil {
+			log.Printf("Failed to unmarshal DynamoDB item: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+	
 		if err != nil {
 			println("Error fetching from DynamoDB:", err.Error())
 		}
 
-		println("cachedData status", cachedData["status"])
-		if cachedData["status"] == "processing" {
+		println("cachedData content", dynamoDbResponse.Content)
+		if dynamoDbResponse.Status == "processing" {
 			response := GPTResponseToJson{
-                Title:   cachedData["title"],
+                Title:   dynamoDbResponse.Title,
                 Vid:     videoID,
-                Content: "",
+                Content: dynamoDbResponse.Content,
                 Lang:    requestBody.Language,
-                Answer:  "",
-                Path:    cachedData["path"],
-                Status:  cachedData["status"], // Add status field
-				UploaderID: cachedData["uploaderId"],
-				UploadDate: cachedData["uploadDate"],
-				Duration: cachedData["duration"],
+                Answer:  dynamoDbResponse.Answer,
+                Path:    dynamoDbResponse.Path,
+                Status:  dynamoDbResponse.Status, // Add status field
+				UploaderID: dynamoDbResponse.UploaderID,
+				UploadDate: dynamoDbResponse.UploadDate,
+				Duration: dynamoDbResponse.Duration,
             }
 			w.Header().Set("Content-Type", "application/json")
             json.NewEncoder(w).Encode(response)
@@ -614,24 +647,24 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         if err == nil && cachedData != nil {
 			println("CACHED DATA", cachedData)
             // Parse the JSON content from DynamoDB
-            var contentData ContentData
-            err := json.Unmarshal([]byte(cachedData["content"]), &contentData)
-            if err != nil {
-                http.Error(w, "Failed to parse content data", http.StatusInternalServerError)
-                return
-            }
+
+			jsonGeneratedByContent, errJson := parseJSONContent(dynamoDbResponse.Content)
+			if errJson != nil {
+				log.Printf("Error parsing summary field on db to json: %v", err)
+				return
+			}
 
             response := GPTResponseToJson{
-                Title:   cachedData["title"],
+                Title:   dynamoDbResponse.Title,
                 Vid:     videoID,
-                Content: contentData.Content,
-                Lang:    requestBody.Language,
-                Answer:  contentData.Answer,
-                Path:    cachedData["path"],
+                Content: jsonGeneratedByContent["content"],
+                Lang:    dynamoDbResponse.Lang,
+                Answer:  jsonGeneratedByContent["answer"],
+                Path:    dynamoDbResponse.Path,
                 Status:  "completed", // Add status field
-				UploaderID: cachedData["uploaderId"],
-				UploadDate: cachedData["uploadDate"],
-				Duration: cachedData["duration"],
+				UploaderID: dynamoDbResponse.UploaderID,
+				UploadDate: dynamoDbResponse.UploadDate,
+				Duration: dynamoDbResponse.Duration,
             }
 
             w.Header().Set("Content-Type", "application/json")

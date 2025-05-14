@@ -2,10 +2,12 @@ module my_lambda_app
 
 go 1.24.1
 
-require github.com/aws/aws-sdk-go-v2/service/dynamodb v1.41.1
+require github.com/aws/aws-sdk-go-v2/service/dynamodb v1.43.1
 
 require (
 	cloud.google.com/go/compute/metadata v0.3.0 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.19.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/dynamodbstreams v1.25.3 // indirect
 	github.com/rs/cors v1.11.1 // indirect
 )
 
