@@ -243,11 +243,11 @@ func pushSummaryToDynamoDB(data HandleSummaryRequestResponse, summary string, pa
     paddedLikeCount := fmt.Sprintf("%08d", data.LikeCount)
 
     item := map[string]dynamodbtypes.AttributeValue{
-        "PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("VIDEO#%s#LANG#%s", data.Vid, data.Lang)},
+        "PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("LANG#%s#VIDEO#%s", data.Lang, data.Vid)},
         "SK": &dynamodbtypes.AttributeValueMemberS{Value: "METADATA"},
 
         // GSI for querying by category and LikeCount
-        "GSI1PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("CATEGORY#%s#LANG#%s", data.Category,data.Lang)},
+        "GSI1PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("LANG#%s#CATEGORY#%s",data.Lang, data.Category)},
         "GSI1SK": &dynamodbtypes.AttributeValueMemberS{
             Value: fmt.Sprintf("LIKECOUNT#%s#%s#%s", paddedLikeCount, data.Vid, data.Lang),
         },
@@ -526,7 +526,7 @@ func sanitizeSubtitle(subtitle string) string {
 
 func getSummaryFromDynamoDB(vid string, lang string) (map[string]dynamodbtypes.AttributeValue, error) {
     key := map[string]dynamodbtypes.AttributeValue{
-        "PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("VIDEO#%s#LANG#%s", vid, lang)},
+        "PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("LANG#%s#VIDEO#%s", lang, vid )},
         "SK": &dynamodbtypes.AttributeValueMemberS{Value: "METADATA"},
     }
 
