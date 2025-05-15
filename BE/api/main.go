@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -545,6 +546,29 @@ func getSummaryFromDynamoDB(vid string, lang string) (map[string]dynamodbtypes.A
     return result.Item, nil
 }
 
+func getVideosByCategoryAndLang( lang string, category string, minLikes int, limit int) ([]map[string]dynamodbtypes.AttributeValue, error) {
+    paddedLike := fmt.Sprintf("LIKECOUNT#%08d", minLikes)
+
+    input := &dynamodb.QueryInput{
+        TableName:              aws.String(dynamoDBTableName),
+        IndexName:              aws.String("GSI1"),
+        KeyConditionExpression: aws.String("GSI1PK = :pk AND GSI1SK > :like"),
+        ExpressionAttributeValues: map[string]dynamodbtypes.AttributeValue{
+            ":pk":   &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("LANG#%s#CATEGORY#%s", lang, category )},
+            ":like": &dynamodbtypes.AttributeValueMemberS{Value: paddedLike},
+        },
+        ScanIndexForward: aws.Bool(false), // descending
+        Limit:            aws.Int32(int32(limit)),
+    }
+
+    result, err := dynamoDBClient.Query(context.TODO(), input)
+    if err != nil {
+        return nil, fmt.Errorf("failed to query videos by category: %w", err)
+    }
+
+    return result.Items, nil
+}
+
 
 type HandleSummaryRequestResponse struct {
 	Vid         string  `json:"vid"`
@@ -760,6 +784,58 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		}
     }()
 }
+
+func handleCategorySummaryRequest(w http.ResponseWriter, r *http.Request) {
+	// Parse query parameters
+	category := r.URL.Query().Get("category")
+	lang := r.URL.Query().Get("lang")
+	minLikesStr := r.URL.Query().Get("min_likes")
+	limitStr := r.URL.Query().Get("limit")
+
+	if category == "" || lang == "" {
+		http.Error(w, "Missing 'category' or 'lang' query parameters", http.StatusBadRequest)
+		return
+	}
+
+	// Defaults
+	minLikes := 0
+	limit := 10
+
+	if minLikesStr != "" {
+		if val, err := strconv.Atoi(minLikesStr); err == nil {
+			minLikes = val
+		}
+	}
+	if limitStr != "" {
+		if val, err := strconv.Atoi(limitStr); err == nil {
+			limit = val
+		}
+	}
+
+	// Query DynamoDB
+	items, err := getVideosByCategoryAndLang(lang, category, minLikes, limit)
+	if err != nil {
+		log.Printf("Error fetching videos by category: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Unmarshal each item
+	var results []DynamoDbResponseToJson
+	for _, item := range items {
+		var response DynamoDbResponseToJson
+		if err := attributevalue.UnmarshalMap(item, &response); err != nil {
+			log.Printf("Error unmarshaling item: %v", err)
+			continue
+		}
+		results = append(results, response)
+	}
+
+	// Respond with JSON
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
+}
+
     
 
 // Update your GPTResponseToJson struct to include Status field
@@ -840,6 +916,7 @@ func main() {
     mux := http.NewServeMux()
     mux.HandleFunc("/summary", handleSummaryRequest)
     mux.HandleFunc("/redirects", handleGoogleRedirect)
+	mux.HandleFunc("/summary/category", handleCategorySummaryRequest) // New endpoint
     mux.HandleFunc("/login", handleGoogleLogin)
 
     // Wrap your router with the CORS handler
