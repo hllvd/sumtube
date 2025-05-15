@@ -242,15 +242,16 @@ func fetchS3(key string) (string, error) {
 func pushSummaryToDynamoDB(data HandleSummaryRequestResponse, summary string, path string) error {
     // Pad LikeCount to 8 digits for correct lexicographic sort
     paddedLikeCount := fmt.Sprintf("%08d", data.LikeCount)
+	dateTimeNow := time.Now().Format("2006-01-02 15:04")
 
     item := map[string]dynamodbtypes.AttributeValue{
         "PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("LANG#%s#VIDEO#%s", data.Lang, data.Vid)},
         "SK": &dynamodbtypes.AttributeValueMemberS{Value: "METADATA"},
 
         // GSI for querying by category and LikeCount
-        "GSI1PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("LANG#%s#CATEGORY#%s",data.Lang, data.Category)},
+        "GSI1PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("LANG#%s#CATEGORY#%s",data.Lang, data.Category,)},
         "GSI1SK": &dynamodbtypes.AttributeValueMemberS{
-            Value: fmt.Sprintf("LIKECOUNT#%s#%s#%s", paddedLikeCount, data.Vid, data.Lang),
+            Value: fmt.Sprintf("SUM_DT#%s#LIKE_COUNT#%s", dateTimeNow, paddedLikeCount),
         },
 
         // Main data fields
@@ -265,6 +266,7 @@ func pushSummaryToDynamoDB(data HandleSummaryRequestResponse, summary string, pa
         "category":     &dynamodbtypes.AttributeValueMemberS{Value: data.Category},
         "video_lang":   &dynamodbtypes.AttributeValueMemberS{Value: data.VideoLang},
         "summary":      &dynamodbtypes.AttributeValueMemberS{Value: summary},
+		"sum_datetime": &dynamodbtypes.AttributeValueMemberS{Value: dateTimeNow},
         "path":         &dynamodbtypes.AttributeValueMemberS{Value: path},
         "like_count":    &dynamodbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%d", data.LikeCount)},
     }
@@ -546,19 +548,18 @@ func getSummaryFromDynamoDB(vid string, lang string) (map[string]dynamodbtypes.A
     return result.Item, nil
 }
 
-func getVideosByCategoryAndLang( lang string, category string, minLikes int, limit int) ([]map[string]dynamodbtypes.AttributeValue, error) {
-    paddedLike := fmt.Sprintf("LIKECOUNT#%08d", minLikes)
-
+func getLatestVideosByCategoryFromDynamoDB(lang string, category string, minLikes int, limit int) ([]map[string]dynamodbtypes.AttributeValue, error) {
     input := &dynamodb.QueryInput{
         TableName:              aws.String(dynamoDBTableName),
         IndexName:              aws.String("GSI1"),
-        KeyConditionExpression: aws.String("GSI1PK = :pk AND GSI1SK > :like"),
+        KeyConditionExpression: aws.String("GSI1PK = :pk"),
         ExpressionAttributeValues: map[string]dynamodbtypes.AttributeValue{
-            ":pk":   &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("LANG#%s#CATEGORY#%s", lang, category )},
-            ":like": &dynamodbtypes.AttributeValueMemberS{Value: paddedLike},
+            ":pk": &dynamodbtypes.AttributeValueMemberS{
+                Value: fmt.Sprintf("LANG#%s#CATEGORY#%s", lang, category),
+            },
         },
-        ScanIndexForward: aws.Bool(false), // descending
-        Limit:            aws.Int32(int32(limit)),
+        ScanIndexForward: aws.Bool(false), // newest first
+        Limit:            aws.Int32(int32(limit * 2)), // fetch extra to filter manually
     }
 
     result, err := dynamoDBClient.Query(context.TODO(), input)
@@ -566,8 +567,28 @@ func getVideosByCategoryAndLang( lang string, category string, minLikes int, lim
         return nil, fmt.Errorf("failed to query videos by category: %w", err)
     }
 
-    return result.Items, nil
+    // Manually filter by LikeCount
+    var filtered []map[string]dynamodbtypes.AttributeValue
+    for _, item := range result.Items {
+        likeAttr, ok := item["like_count"].(*dynamodbtypes.AttributeValueMemberN)
+        if !ok {
+            continue
+        }
+        likeCount, err := strconv.Atoi(likeAttr.Value)
+        if err != nil {
+            continue
+        }
+        if likeCount >= minLikes {
+            filtered = append(filtered, item)
+        }
+        if len(filtered) >= limit {
+            break
+        }
+    }
+
+    return filtered, nil
 }
+
 
 
 type HandleSummaryRequestResponse struct {
@@ -776,12 +797,12 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		category := initialResponse.Category
-		likeCounter := initialResponse.LikeCount
+		// category := initialResponse.Category
+		// likeCounter := initialResponse.LikeCount
 		
-		if err := pushCategoryStatsToDynamoDB(category, likeCounter, videoID, summary); err != nil {
-			log.Printf("Failed to push category stats to DynamoDB: %v", err)
-		}
+		// // if err := pushCategoryStatsToDynamoDB(category, likeCounter, videoID, summary); err != nil {
+		// // 	log.Printf("Failed to push category stats to DynamoDB: %v", err)
+		// // }
     }()
 }
 
@@ -813,7 +834,7 @@ func handleCategorySummaryRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Query DynamoDB
-	items, err := getVideosByCategoryAndLang(lang, category, minLikes, limit)
+	items, err := getLatestVideosByCategoryFromDynamoDB(lang, category, minLikes, limit)
 	if err != nil {
 		log.Printf("Error fetching videos by category: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
