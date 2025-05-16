@@ -609,6 +609,7 @@ type DynamoDbResponseToJson struct {
     Title      string `dynamodbav:"title" json:"title"`
     Vid        string `dynamodbav:"vid" json:"vid"`
     Content    string `dynamodbav:"summary" json:"content"`
+	Category   string `dynamodbav:"category" json:"category"`
 	LikeCount  string `dynamodbav:"like_count" json:"like_count"`
     Lang       string `dynamodbav:"lang" json:"lang"`
     Answer     string `dynamodbav:"answer" json:"answer"`
@@ -672,6 +673,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
                 Title:   dynamoDbResponse.Title,
                 Vid:     videoID,
                 Content: dynamoDbResponse.Content,
+				Category: dynamoDbResponse.Category,
                 Lang:    requestBody.Language,
                 Answer:  dynamoDbResponse.Answer,
                 Path:    dynamoDbResponse.Path,
@@ -703,6 +705,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
                 Title:   dynamoDbResponse.Title,
                 Vid:     videoID,
                 Content: jsonGeneratedByContent["content"],
+				Category: dynamoDbResponse.Category,
                 Lang:    dynamoDbResponse.Lang,
                 Answer:  jsonGeneratedByContent["answer"],
                 Path:    dynamoDbResponse.Path,
@@ -865,6 +868,7 @@ type GPTResponseToJson struct {
     Vid     string `json:"videoId"`
     Content string `json:"content,omitempty"`
     Lang    string `json:"lang"`
+	Category string `json:"category,omitempty"`
     Answer  string `json:"answer,omitempty"`
     Path    string `json:"path,omitempty"`
     Status  string `json:"status"` // Mandatory field

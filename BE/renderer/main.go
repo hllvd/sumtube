@@ -160,6 +160,61 @@ func ReplaceMarkdownTimestamps(videoID string, content string) string {
 		return newLink
 	})
 }
+
+func GetVideosFromCategory(lang string, categoryName string, limit int) ([]map[string]string, error) {
+    // Monta a URL com parâmetros
+    baseURL := os.Getenv("SUMTUBE_VIDEOS_RELATED_API")
+    if baseURL == "" {
+        return nil, fmt.Errorf("SUMTUBE_VIDEOS_RELATED_API is not set")
+    }
+
+    // Escapa a categoria para URL
+    escapedCategory := url.QueryEscape(categoryName)
+    fullURL := fmt.Sprintf("%s?category=%s&lang=%s&limit=%d", baseURL, escapedCategory, lang, limit)
+
+    // Faz a requisição
+    resp, err := http.Get(fullURL)
+    if err != nil {
+        return nil, fmt.Errorf("failed to call API: %v", err)
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode != http.StatusOK {
+        body, _ := io.ReadAll(resp.Body)
+        return nil, fmt.Errorf("API returned non-200 status: %d - %s", resp.StatusCode, string(body))
+    }
+
+    // Lê e decodifica o corpo da resposta
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return nil, fmt.Errorf("failed to read response: %v", err)
+    }
+
+    var rawItems []map[string]interface{}
+    if err := json.Unmarshal(body, &rawItems); err != nil {
+        return nil, fmt.Errorf("failed to parse response JSON: %v", err)
+    }
+
+    // Extrai somente vid e title
+    var videos []map[string]string
+    for _, item := range rawItems {
+        vid, _ := item["vid"].(string)
+        title, _ := item["title"].(string)
+        path, _ := item["path"].(string)
+        lang, _ := item["lang"].(string)
+        if vid != "" && title != "" {
+            videos = append(videos, map[string]string{
+                "vid":   vid,
+                "title": title,
+                "path":  path,
+                "lang":  lang,
+            })
+        }
+    }
+
+    return videos, nil
+}
+
     
 // GetVideoContent fetches content from the API for a given video ID and language
 func GetVideoContent(videoID, lang string) (map[string]interface{}, error) {
@@ -194,6 +249,8 @@ func GetVideoContent(videoID, lang string) (map[string]interface{}, error) {
     
     return result, nil
 }
+
+
 
 // ConvertMarkdownToHTML converts a markdown string to HTML
 func ConvertMarkdownToHTML(md string) string {
@@ -525,6 +582,13 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
         return
     }
 
+    relatedVideos, err := GetVideosFromCategory(lang, result["category"].(string), 10)
+
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
     // Extração de dados da resposta
     content := result["content"].(string)
     answer := result["answer"].(string)
@@ -555,6 +619,7 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
         UploadId             string
         UploadDate           string
         Duration             string
+        RelatedVideosArr     []map[string]string
         VideoDurationMinutes int
         ReadingTimeMinutes   int
         TimeSavedMinutes     int
@@ -572,6 +637,7 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
         Duration:             rawDuration,
         VideoDurationMinutes: videoDurationMinutes,
         ReadingTimeMinutes:   readingTimeMinutes,
+        RelatedVideosArr:     relatedVideos,
         TimeSavedMinutes:     timeSaved,
         Content:              template.HTML(ConvertMarkdownToHTML(ReplaceMarkdownTimestamps(videoId, content))),
         Answer:               template.HTML(ConvertMarkdownToHTML(answer)),

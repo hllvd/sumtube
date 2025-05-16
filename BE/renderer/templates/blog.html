@@ -102,7 +102,7 @@
       </main>
 
       <!-- Related Videos Sidebar -->
-      <aside class="lg:w-1/3 mt-10 lg:mt-0">
+      <!--<aside class="lg:w-1/3 mt-10 lg:mt-0">
         <h3 class="text-lg font-semibold mb-4">📺 Related Videos</h3>
         <ul class="space-y-4">
           <li class="flex gap-4">
@@ -133,6 +133,36 @@
               >
             </div>
           </li>
+        </ul>
+      </aside>-->
+      <!-- Related Videos Sidebar -->
+      <aside class="lg:w-1/3 mt-10 lg:mt-0">
+        <h3 class="text-lg font-semibold mb-4">📺 Related Videos</h3>
+        <ul class="space-y-4">
+          {{range .RelatedVideosArr}}
+          <li class="flex gap-4">
+            <img
+              src="https://img.youtube.com/vi/{{.vid}}/hqdefault.jpg"
+              alt="{{.title}}"
+              class="w-20 h-14 object-cover rounded"
+            />
+            <div>
+              <a 
+              href="{{$.BaseUrl}}/{{.lang}}/{{.vid}}/{{.path}}"  
+              class="font-medium line-clamp-2 text-sm"
+              title="{{.title}}"
+              alt="{{.title}}">
+                {{.title}}
+              </a>
+              <a 
+                href="{{$.BaseUrl}}/{{.lang}}/{{.vid}}/{{.path}}" 
+                class="text-sm text-red-600 hover:underline"
+              >
+                Watch Summary
+              </a>
+            </div>
+          </li>
+          {{end}}
         </ul>
       </aside>
     </div>
