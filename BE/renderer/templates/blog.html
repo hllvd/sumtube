@@ -80,8 +80,24 @@
           }
         </script>
 
+        <div class="max-w-2xl mx-auto mt-16 text-center pt-2 pb-2 bg-white">
+          <h2 class="text-3xl font-bold">Summarize Any YouTube Video</h2>
+          <p class="text-gray-600 mt-2">
+            Enter a YouTube video URL and get an AI-generated summary.
+          </p>
+
+          <!-- React form mounts here -->
+          <div
+            id="react-root"
+            class="mt-6 flex flex-col items-center justify-center gap-2 w-full"
+            data-lang="{{.Language}}"
+          >
+            <!-- React replaces this -->
+          </div>
+        </div>
+
         <!-- Question Section -->
-        <div class="mt-10 bg-white p-6 rounded-lg shadow-md">
+        <!-- <div class="mt-10 bg-white p-6 rounded-lg shadow-md">
           <h2 class="text-xl font-semibold mb-2">
             Have a question about the video?
           </h2>
@@ -98,7 +114,7 @@
           >
             Submit
           </button>
-        </div>
+        </div> -->
       </main>
 
       <!-- Related Videos Sidebar -->
@@ -132,5 +148,6 @@
         </ul>
       </aside>
     </div>
+    <script type="module" src="/static/app.js"></script>
   </body>
 </html>
