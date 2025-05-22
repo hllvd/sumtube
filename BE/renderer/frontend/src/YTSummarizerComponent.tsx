@@ -1,4 +1,5 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
+
 import "./App.css"
 
 function YTSummarizerComponent() {
@@ -10,6 +11,24 @@ function YTSummarizerComponent() {
     title: string
     duration: string
   }>(null)
+
+  // Use useEffect to handle automatic submission
+  useEffect(() => {
+    const root = document.getElementById("react-root")
+    const videoId = root?.dataset.vid // Changed from videoId to vid
+
+    if (videoId) {
+      // Construct the YouTube URL
+      const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`
+      setVideoUrl(youtubeUrl)
+
+      // Trigger automatic submission
+      const language = root?.dataset.lang || "en"
+      setIsLoading(true)
+      setVideoInfo(null)
+      fetchSummary(videoId, language)
+    }
+  }, []) // Empty dependency array means this runs once on component mount
 
   const extractVideoId = (url: string) => {
     const regExp =

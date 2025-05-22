@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -365,7 +366,7 @@ const (
 	UNKNOWN RouteType = iota
 	BLOG_TEMPLATE
 	REDIRECT_HOME
-	REDIRECT_BLOG_HOME
+	REDIRECT_BLOG_RETURN_HOME
 	HOME
 )
 
@@ -385,30 +386,49 @@ func isLikelyTitle(s string) bool {
 
 // check if the route type based on URL
 func GetRouteType(segments []string) RouteType {
+	// Remove empty segments
+	segments = slices.DeleteFunc(segments, func(s string) bool {
+		return s == ""
+	})
 	n := len(segments)
-
-	if n == 1 {
-		if allowedLanguages[segments[0]] {
-			return HOME
-		} else if isVideoID(segments[0]) {
-			return REDIRECT_BLOG_HOME
-		}
-	} else if n == 2 {
-		lang, second := segments[0], segments[1]
-		if allowedLanguages[lang] && isVideoID(second) {
-			return REDIRECT_BLOG_HOME
-		}
-	} else if n == 3 {
-		lang, first, second := segments[0], segments[1], segments[2]
-		if allowedLanguages[lang] {
-			if isVideoID(first) && isLikelyTitle(second) {
-				return BLOG_TEMPLATE
-			}
-			if isLikelyTitle(first) && isVideoID(second) {
-				return REDIRECT_HOME
+    println("segments: ", segments)
+    println("segments n: ", n)
+    
+    if n == 3 {
+        first, second, third := segments[0], segments[1], segments[2]
+		if allowedLanguages[first] {
+			if isVideoID(second) && isLikelyTitle(third) {
+                println("4 isVideoID(second) && isLikelyTitle(third)", isVideoID(second), isLikelyTitle(third))
+				println("return BLOG_TEMPLATE")
+                return BLOG_TEMPLATE
 			}
 		}
 	}
+
+    if n == 2 {
+        first, second := segments[0], segments[1]
+		if allowedLanguages[first] && isVideoID(second) {
+            println("3 allowedLanguages[first] && isVideoID(second)", allowedLanguages[first], isVideoID(second))
+            println("return REDIRECT_BLOG_RETURN_HOME")
+			return REDIRECT_BLOG_RETURN_HOME
+		}
+	}
+    
+    if n == 1{
+        first := segments[0]
+		if allowedLanguages[first] {
+            println("1 allowedLanguages: ", first)
+            println("return HOME")
+			return HOME
+		} else if isVideoID(first) {
+            println("2 isVideoID(first)", isVideoID(first))
+            println("return HOME")
+			return HOME
+		}
+	} 
+    
+    
+    println("6 UNKNOWN")
 	return REDIRECT_HOME
 }
 
@@ -440,39 +460,52 @@ func router(w http.ResponseWriter, r *http.Request) {
 
     switch routeType {
         case BLOG_TEMPLATE:
+            println("case BLOG_TEMPLATE")
             loadBlog(w, r, lang, title, videoId)
         
-        case REDIRECT_BLOG_HOME:
-            result, err := GetVideoContent(videoId, langHandled)
+        case REDIRECT_BLOG_RETURN_HOME:
+            println("case REDIRECT_BLOG_RETURN_HOME")
+            result, _ := GetVideoContent(videoId, langHandled)
             // Go do Blog
             if err == nil {
-                status := result["status"].(string)
-                path := result["path"].(string)
-                if (status == "completed"){
-                    newPath := fmt.Sprintf("/%s%s%", langHandled, videoId, path)
-                    redirectURL := &url.URL{
-                        Path:     newPath,
-                        RawQuery: r.URL.RawQuery,
+                if status, ok := result["status"].(string); ok {
+                    println("here")
+                    println("status: ", status)
+                    if (status == "completed"){
+                        path := result["path"].(string)
+                        newPath := fmt.Sprintf("/%s/%s/%s", langHandled, videoId, path)
+                        redirectURL := &url.URL{
+                            Path:     newPath,
+                            RawQuery: r.URL.RawQuery,
+                        }
+                        println("newPath",newPath)
+                        http.Redirect(w, r, redirectURL.String(), http.StatusMovedPermanently)
                     }
-                    http.Redirect(w, r, redirectURL.String(), http.StatusMovedPermanently)
                 }
             }
             
+            println("not there")
+            if (videoId != "" || (videoId != "" && lang != "")) {
+                loadIndex(w, r, lang, videoId)
+            }
+            
             // Go to Home
-            newPath := fmt.Sprintf("/%s%s", langHandled, videoId)
+            newPath := fmt.Sprintf("/%s/%s", langHandled, videoId)
             redirectURL := &url.URL{
                 Path:     newPath,
                 RawQuery: r.URL.RawQuery,
             }
             http.Redirect(w, r, redirectURL.String(), http.StatusMovedPermanently)
         case REDIRECT_HOME:
+            println("case REDIRECT_HOME")
             newPath := fmt.Sprintf("/%s", langHandled)
             redirectURL := &url.URL{
                 Path:     newPath,
             }
             http.Redirect(w, r, redirectURL.String(), http.StatusMovedPermanently)
         case HOME:
-            loadIndex(w, r, lang)
+            println("case HOME")
+            loadIndex(w, r, lang, videoId)
         default:
             http.Error(w, "Invalid route", http.StatusNotFound)
 	}
@@ -531,35 +564,44 @@ func router(w http.ResponseWriter, r *http.Request) {
 
 // loadIndex handles the index page
 // Example URL: /en
-func loadIndex(w http.ResponseWriter, r *http.Request, lang string) {
-	tmpl, err := template.ParseFS(templateFS, filepath.Join("templates", "home.html"))
+func loadIndex(w http.ResponseWriter, r *http.Request, lang string, video ...string) {
+        // Use the first video parameter if provided, otherwise use empty string
+        videoId := ""
+        if len(video) > 0 {
+            videoId = video[0]
+        }
 
-	dir, _ := os.Getwd()
-	fmt.Println("Current directory:", dir)
-	fmt.Println("full path:", filepath.Join("templates", "home.html"))
-    if err != nil {
-        http.Error(w, fmt.Sprintf("Error loading template: %v", err), http.StatusInternalServerError)
-        return
-    }
+        tmpl, err := template.ParseFS(templateFS, filepath.Join("templates", "home.html"))
+
+        dir, _ := os.Getwd()
+        fmt.Println("Current directory:", dir)
+        fmt.Println("full path:", filepath.Join("templates", "home.html"))
+        if err != nil {
+            http.Error(w, fmt.Sprintf("Error loading template: %v", err), http.StatusInternalServerError)
+            return
+        }
 
     // Prepare data to pass to the template
-    data := struct {
-        Language string
-        Path     string
-		ApiUrl   string
-    }{
-        Language: lang,
-        Path:     r.URL.Path,
-		ApiUrl:   os.Getenv("SUMTUBE_API_PUBLIC"),
-    }
+        data := struct {
+            Language string
+            Path     string
+            ApiUrl   string
+            VideoId  string  // Add VideoId to the template data
+        }{
+            Language: lang,
+            Path:     r.URL.Path,
+            ApiUrl:   os.Getenv("SUMTUBE_API_PUBLIC"),
+            VideoId:  videoId,
+        }
 
-    // Execute the template with the data
-    w.Header().Set("Content-Type", "text/html")
-    err = tmpl.Execute(w, data)
-    if err != nil {
-        http.Error(w, fmt.Sprintf("Error rendering template: %v", err), http.StatusInternalServerError)
+        // Execute the template with the data
+        w.Header().Set("Content-Type", "text/html")
+        err = tmpl.Execute(w, data)
+        if err != nil {
+            http.Error(w, fmt.Sprintf("Error rendering template: %v", err), http.StatusInternalServerError)
+        }
     }
-}
+	
 
 // loadBlog handles the blog page
 // Example URL: /en/my-video-title/dQw4w9WgXcQ
