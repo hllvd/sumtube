@@ -3,19 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>YouTube Summarizer</title>
+    <title>{{call .T "title"}}</title>
     <script src="https://cdn.tailwindcss.com"></script>
   </head>
   <body class="bg-gray-100">
     <nav class="bg-red-600 p-4 text-white flex justify-between items-center">
-      <h1 class="text-xl font-bold">YouTube Summarizer</h1>
+      <h1 class="text-xl font-bold">Youtube Summarizer</h1>
       <button class="bg-white text-red-600 px-4 py-2 rounded">Login</button>
     </nav>
 
     <div class="max-w-2xl mx-auto mt-16 text-center">
-      <h2 class="text-3xl font-bold">Summarize Any YouTube Video</h2>
+      <h2 class="text-3xl font-bold">{{call .T "heading"}}</h2>
       <p class="text-gray-600 mt-2">
-        Enter a YouTube video URL and get an AI-generated summary.
+        {{call .T "subheading"}}
       </p>
 
       <!-- React form mounts here -->

@@ -596,11 +596,15 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string, video ...str
             Path     string
             ApiUrl   string
             VideoId  string  // Add VideoId to the template data
+            T        func(string) string // Translation function
         }{
             Language: lang,
             Path:     r.URL.Path,
             ApiUrl:   os.Getenv("SUMTUBE_API_PUBLIC"),
             VideoId:  videoId,
+            T: func(key string) string {
+                return t(lang, key)
+            },
         }
 
         // Execute the template with the data
@@ -610,6 +614,41 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string, video ...str
             http.Error(w, fmt.Sprintf("Error rendering template: %v", err), http.StatusInternalServerError)
         }
     }
+
+    func t(lang, key string) string {
+        var translations = map[string]map[string]string{
+            "en": {
+                "title": "YouTube Summarizer",
+                "nav_login": "Login",
+                "heading": "Summarize Any YouTube Video",
+                "subheading": "Enter a YouTube video URL and get an AI-generated summary",
+                "footer_copyright": "© 2025 YouTube Summarizer. All rights reserved.",
+            },
+            "pt": {
+                "title": "Resumidor de vídeos do YouTube",
+                "nav_login": "Entrar",
+                "heading": "Resuma Qualquer Vídeo do YouTube",
+                "subheading": "Digite a URL de um vídeo do YouTube e obtenha um resumo gerado por IA",
+                "footer_copyright": "© 2025 Resumidor de YouTube. Todos os direitos reservados.",
+            },
+            "es": {
+                "title": "Resumidor de videos de YouTube",
+                "nav_login": "Iniciar Sesión",
+                "heading": "Resume Cualquier Video de YouTube",
+                "subheading": "Ingresa la URL de un video de YouTube y obtén un resumen generado por IA",
+                "footer_copyright": "© 2025 Resumidor de YouTube. Todos los derechos reservados.",
+            },
+        }
+        
+        if translations[lang] == nil {
+            lang = "en" // fallback to English
+        }
+        if val, ok := translations[lang][key]; ok {
+            return val
+        }
+        return translations["en"][key] // fallback to English key
+    }
+    
 	
 
 // loadBlog handles the blog page
