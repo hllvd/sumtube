@@ -95,10 +95,19 @@ func langHandle(w http.ResponseWriter, r *http.Request) string {
 }
 
 func extractVideoId(segments []string) string {
-	if len(segments) >= 2 {
-		return segments[1]
-	}
-	return ""
+    // YouTube video ID pattern (11 characters of letters, numbers, underscores, or hyphens)
+    idPattern := `^[A-Za-z0-9_-]{11}$`
+    // Check both possible positions (0 and 1) for a valid YouTube ID
+    for _, pos := range []int{0, 1} {
+        if len(segments) > pos {
+            candidate := segments[pos]
+            if matched, _ := regexp.MatchString(idPattern, candidate); matched {
+                return candidate
+            }
+        }
+    }
+
+    return ""
 }
 
 
@@ -504,7 +513,7 @@ func router(w http.ResponseWriter, r *http.Request) {
             }
             http.Redirect(w, r, redirectURL.String(), http.StatusMovedPermanently)
         case HOME:
-            println("case HOME")
+            println("case HOME", lang, videoId)
             loadIndex(w, r, lang, videoId)
         default:
             http.Error(w, "Invalid route", http.StatusNotFound)
