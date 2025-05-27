@@ -9,20 +9,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up SSH
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+      - name: Set up SSH key from base64 secret
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY_BASE64 }}" | base64 --decode > ~/.vps_key.pem
+          chmod 600 ~/.vps_key.pem
+          echo "StrictHostKeyChecking no" >> ~/.ssh/config
 
       - name: Deploy to VPS
         env:
           HOST: ${{ secrets.VPS_HOST }}
           USER: ${{ secrets.VPS_USER }}
         run: |
-          ssh -o StrictHostKeyChecking=no $USER@$HOST << 'EOF'
+          ssh -i ~/.vps_key.pem $USER@$HOST << 'EOF'
+            echo "✅ Connected to VPS"
             cd /home/$USER/myapp
             git pull origin main
             docker-compose down
