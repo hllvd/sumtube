@@ -12,21 +12,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up SSH key from base64 secret
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.VPS_SSH_KEY_BASE64 }}" | base64 --decode > ~/.vps_key.pem
-          chmod 600 ~/.vps_key.pem
-          ls ~/
-          echo "StrictHostKeyChecking no" >> ~/.ssh/config
+      - name: Install sshpass
+        run: sudo apt-get update && sudo apt-get install -y sshpass
 
-      - name: Deploy to VPS
+      - name: Deploy to VPS using password
         env:
           HOST: ${{ vars.VPS_HOST }}
           USER: ${{ vars.VPS_USER }}
+          PASSWORD: ${{ secrets.VPS_SSH_PASSWORD }}
         run: |
-          ssh -i ~/.vps_key.pem $USER@$HOST << 'EOF'
-            echo "✅ Connected to VPS"
+          sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no $USER@$HOST << 'EOF'
+            echo "✅ Connected to VPS with password"
             cd /home/$USER/myapp
             git pull origin main
             docker-compose down
