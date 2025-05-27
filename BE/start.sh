@@ -11,6 +11,7 @@ action=$1
 
 case $action in
     "up")
+        ./start.sh down
         if [[ "$(docker-compose ps --services | grep -w go-server)" == "go-server" ]]; then
             echo "Service go-server is running"
             docker-compose stop go-server

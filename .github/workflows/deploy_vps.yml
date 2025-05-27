@@ -23,8 +23,9 @@ jobs:
         run: |
           sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no $USER@$HOST << 'EOF'
             echo "✅ Connected to VPS with password"
-            cd /home/$USER/myapp
+            cd /home/$USER/sumtube
             git pull origin main
-            docker-compose down
-            docker-compose up --build -d
+            cd BE
+            chmod +x start.sh
+            ./start.sh up
           EOF
