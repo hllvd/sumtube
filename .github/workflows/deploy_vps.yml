@@ -21,8 +21,8 @@ jobs:
 
       - name: Deploy to VPS
         env:
-          HOST: ${{ secrets.VPS_HOST }}
-          USER: ${{ secrets.VPS_USER }}
+          HOST: ${{ vars.VPS_HOST }}
+          USER: ${{ vars.VPS_USER }}
         run: |
           ssh -i ~/.vps_key.pem $USER@$HOST << 'EOF'
             echo "✅ Connected to VPS"
