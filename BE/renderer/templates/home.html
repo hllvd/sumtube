@@ -17,13 +17,14 @@
       <p class="text-gray-600 mt-2">
         {{call .T "subheading"}}
       </p>
-
+      <em>{{.ApiUrl}}</em>
       <!-- React form mounts here -->
       <div
         id="react-root"
         class="mt-6 flex flex-col items-center justify-center gap-2 w-full"
         data-lang="{{.Language}}"
         data-vid="{{.VideoId}}"
+        data-apiUrl="{{.ApiUrl}}"
       >
         <!-- React replaces this -->
       </div>

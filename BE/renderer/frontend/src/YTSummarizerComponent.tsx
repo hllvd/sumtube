@@ -24,9 +24,10 @@ function YTSummarizerComponent() {
 
       // Trigger automatic submission
       const language = root?.dataset.lang || "en"
+      const apiUrl = root?.dataset.apiUrl || "http://localhost:8080"
       setIsLoading(true)
       setVideoInfo(null)
-      fetchSummary(videoId, language)
+      fetchSummary(apiUrl, videoId, language)
     }
   }, []) // Empty dependency array means this runs once on component mount
 
@@ -37,9 +38,13 @@ function YTSummarizerComponent() {
     return match && match[2].length === 11 ? match[2] : null
   }
 
-  const fetchSummary = async (videoId: string, language: string) => {
+  const fetchSummary = async (
+    apiUrl: string,
+    videoId: string,
+    language: string
+  ) => {
     try {
-      const response = await fetch("http://localhost:8080/summary", {
+      const response = await fetch(`${apiUrl}/summary`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -56,7 +61,7 @@ function YTSummarizerComponent() {
           title: data.title,
           duration: data.duration,
         })
-        setTimeout(() => fetchSummary(videoId, language), 3000)
+        setTimeout(() => fetchSummary(apiUrl, videoId, language), 3000)
       } else if (data.status === "completed") {
         window.location.href = `${window.location.origin}/${data.lang}/${data.videoId}/${data.path}`
       }
@@ -75,7 +80,8 @@ function YTSummarizerComponent() {
     setVideoInfo(null)
     const root = document.getElementById("react-root")
     const language = root?.dataset.lang || "en"
-    fetchSummary(videoId, language)
+    const apiUrl = root?.dataset.apiUrl || "http://localhost:8080"
+    fetchSummary(apiUrl, videoId, language)
   }
 
   return (
