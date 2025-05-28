@@ -28,11 +28,15 @@ services:
     container_name: nginx
     ports:
       - "80:80"
+    env_file:
+      - ./nginx/.env # 👈 use unified env file
     volumes:
-      - ./api/nginx/nginx.conf:/etc/nginx/conf.d/api.conf
-      - ./renderer/nginx/nginx.conf:/etc/nginx/conf.d/renderer.conf
+      - ./api/nginx/api.conf.template:/etc/nginx/conf.d/api.conf.template
+      - ./renderer/nginx/renderer.conf.template:/etc/nginx/conf.d/renderer.conf.template
+      - ./nginx/docker-entrypoint.sh:/docker-entrypoint.sh
       - ./renderer/static:/app/static
       - /dev/null:/etc/nginx/conf.d/default.conf
+    entrypoint: ["/docker-entrypoint.sh"]
     depends_on:
       - go-server
       - renderer-server
