@@ -1,6 +1,6 @@
 server {
     listen 80;
-    server_name api.sumtube.io
+
 
     location / {
         proxy_pass http://${GO_SERVER_HOST}:${GO_SERVER_PORT};
