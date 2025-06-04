@@ -29,7 +29,7 @@ services:
     ports:
       - "80:80"
     env_file:
-      - ./nginx/.env # 👈 use unified env file
+      - ./nginx/.env
     volumes:
       - ./api/nginx/api.conf.template:/etc/nginx/conf.d/api.conf.template
       - ./renderer/nginx/renderer.conf.template:/etc/nginx/conf.d/renderer.conf.template
