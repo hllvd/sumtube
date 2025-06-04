@@ -97,7 +97,17 @@ type VideoMetadata struct {
 }
 
 func getVideoMetadata(videoURL string) (string, string, string, string, float64, string, string, int, error) {
-	cmd := exec.Command("yt-dlp", "--dump-json", videoURL)
+	// Get the proxy server from environment variable
+	proxy := os.Getenv("PROXY_SERVER")
+
+	// Build yt-dlp command arguments
+	args := []string{"--dump-json"}
+	if proxy != "" {
+		args = append(args, "--proxy", proxy)
+	}
+	args = append(args, videoURL)
+
+	cmd := exec.Command("yt-dlp", args...)
 	output, err := cmd.Output()
 	if err != nil {
 		return "", "", "", "", 0, "", "", 0, fmt.Errorf("failed to run yt-dlp: %w", err)
@@ -108,7 +118,6 @@ func getVideoMetadata(videoURL string) (string, string, string, string, float64,
 		return "", "", "", "", 0, "", "", 0, fmt.Errorf("failed to parse metadata: %w", err)
 	}
 
-	// Get first category or empty string if none
 	category := ""
 	if len(metadata.Categories) > 0 {
 		category = metadata.Categories[0]
@@ -165,15 +174,24 @@ func downloadSubtitle(videoURL string, lang string) (string, error) {
 }
 
 func tryDownloadSubtitle(videoURL, videoID, outputTemplate, lang string) (string, error) {
-	cmd := exec.Command("yt-dlp",
+	// Get proxy from environment
+	proxy := os.Getenv("PROXY_SERVER")
+
+	// Build yt-dlp arguments
+	args := []string{
 		"--skip-download",
 		"--write-auto-sub",
 		"--sub-lang", lang,
 		"--convert-subs", "srt",
 		"-k",
 		"-o", outputTemplate,
-		videoURL,
-	)
+	}
+	if proxy != "" {
+		args = append(args, "--proxy", proxy)
+	}
+	args = append(args, videoURL)
+
+	cmd := exec.Command("yt-dlp", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
