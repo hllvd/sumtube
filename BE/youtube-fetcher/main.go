@@ -101,10 +101,11 @@ func main() {
  if len(os.Args) < 2 {
   log.Fatalf("usage: %s <videoID>", filepath.Base(os.Args[0]))
  }
-
+ println("after len")
  videoID := os.Args[1]
-
+ println("videoID",videoID)
  captions, err := listVideoCaptions(videoID)
+ println("captions",captions)
  if err != nil {
   log.Fatalf("unable to list video captions: %v", err)
  }
