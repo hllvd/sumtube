@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -110,10 +111,13 @@ func main() {
  if err != nil {
   log.Fatalf("unable to list video captions: %v", err)
  }
-
+ 
+ allowedLangs := []string{"pt", "en", "es", "it", "fr"}
  for _, caption := range captions {
-   println("lang",caption.LanguageCode)
-  if caption.LanguageCode == "pt" {
+  captionLang := caption.LanguageCode
+   println("captionLang",captionLang)
+  
+   if slices.Contains(allowedLangs, captionLang) {
    err := caption.Download(fmt.Sprintf("%s.xml", videoID))
    if err != nil {
     log.Printf("unable to download caption: %v", err)
