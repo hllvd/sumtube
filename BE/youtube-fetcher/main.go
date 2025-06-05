@@ -97,6 +97,7 @@ func listVideoCaptions(videoID string) ([]Caption, error) {
 }
 
 func main() {
+ println("init")
  if len(os.Args) < 2 {
   log.Fatalf("usage: %s <videoID>", filepath.Base(os.Args[0]))
  }
