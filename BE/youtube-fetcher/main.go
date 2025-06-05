@@ -68,7 +68,7 @@ func listVideoCaptions(videoID string) ([]Caption, error) {
  if err != nil {
   return nil, fmt.Errorf("unable to read response body: %w", err)
  }
- fmt.Println(string(content))
+ //fmt.Println(string(content))
 
  pageContent := string(content)
 
@@ -81,7 +81,7 @@ func listVideoCaptions(videoID string) ([]Caption, error) {
 
  // Find the end of the variable
  pageContentSplited = strings.Split(pageContentSplited[1], ";</script>")
- println("pageContentSplited",pageContentSplited)
+ fmt.Println("pageContentSplited",pageContentSplited[0])
  if len(pageContentSplited) < 2 {
   return nil, fmt.Errorf("unable to find the end of the ytInitialPlayerResponse variable")
  }
