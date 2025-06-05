@@ -71,12 +71,14 @@ func listVideoCaptions(videoID string) ([]Caption, error) {
 
  // Find ytInitialPlayerResponse variable
  pageContentSplited := strings.Split(pageContent, "ytInitialPlayerResponse = ")
+ println("pageContentSplited",pageContentSplited)
  if len(pageContentSplited) < 2 {
   return nil, fmt.Errorf("unable to find ytInitialPlayerResponse variable")
  }
 
  // Find the end of the variable
  pageContentSplited = strings.Split(pageContentSplited[1], ";</script>")
+ println("pageContentSplited",pageContentSplited)
  if len(pageContentSplited) < 2 {
   return nil, fmt.Errorf("unable to find the end of the ytInitialPlayerResponse variable")
  }
