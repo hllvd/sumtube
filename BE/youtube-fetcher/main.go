@@ -55,7 +55,9 @@ func (c *Caption) Download(targetPath string) error {
 }
 
 func listVideoCaptions(videoID string) ([]Caption, error) {
- resp, err := http.Get(baseURL + videoID)
+ url := baseURL + videoID + "&cc_load_policy=1"
+ println("url : ", url)
+ resp, err := http.Get(url)
  if err != nil {
   return nil, fmt.Errorf("unable to download video page: %w", err)
  }
