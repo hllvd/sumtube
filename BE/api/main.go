@@ -98,7 +98,7 @@ type VideoMetadata struct {
 
 func getVideoMetadata(videoURL string) (string, string, string, string, float64, string, string, int, error) {
 	// Get the proxy server from environment variable
-	proxy := os.Getenv("PROXY_SERVER")
+	proxy := os.Getenv("YDT_PROXY_SERVER")
 
 	// Build yt-dlp command arguments
 	args := []string{"--dump-json"}
@@ -175,7 +175,7 @@ func downloadSubtitle(videoURL string, lang string) (string, error) {
 
 func tryDownloadSubtitle(videoURL, videoID, outputTemplate, lang string) (string, error) {
 	// Get proxy from environment
-	proxy := os.Getenv("PROXY_SERVER")
+	proxy := os.Getenv("YDT_PROXY_SERVER")
 
 	// Build yt-dlp arguments
 	args := []string{
