@@ -61,6 +61,7 @@ func listVideoCaptions(videoID string) ([]Caption, error) {
  defer resp.Body.Close()
 
  content, err := io.ReadAll(resp.Body)
+ println("content",content)
  if err != nil {
   return nil, fmt.Errorf("unable to read response body: %w", err)
  }
