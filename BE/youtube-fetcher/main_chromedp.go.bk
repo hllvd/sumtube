@@ -1,0 +1,169 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"sync"
+	"time"
+
+	"github.com/chromedp/chromedp"
+	"github.com/chromedp/chromedp/network"
+)
+
+// NetworkMonitor helps track network activity to determine when the page is idle.
+// This is crucial for capturing all async requests, as it waits until no new
+// requests have been initiated for a specified duration.
+type NetworkMonitor struct {
+	mu             sync.Mutex
+	activeRequests map[network.RequestID]struct{} // Set of active request IDs
+	lastActivity   time.Time                      // Timestamp of the last network activity
+	idleThreshold  time.Duration                  // Duration of inactivity to consider the network idle
+	idleChan       chan struct{}                  // Channel to signal when the network becomes idle
+}
+
+// NewNetworkMonitor creates and initializes a new NetworkMonitor.
+func NewNetworkMonitor(threshold time.Duration) *NetworkMonitor {
+	nm := &NetworkMonitor{
+		activeRequests: make(map[network.RequestID]struct{}),
+		lastActivity:   time.Now(),
+		idleThreshold:  threshold,
+		idleChan:       make(chan struct{}, 1), // Buffered to prevent blocking if already idle
+	}
+	go nm.monitorIdle() // Start the goroutine to continuously check for idle state
+	return nm
+}
+
+// RequestStarted should be called when a new network request begins.
+func (nm *NetworkMonitor) RequestStarted(requestID network.RequestID) {
+	nm.mu.Lock()
+	defer nm.mu.Unlock()
+	nm.activeRequests[requestID] = struct{}{} // Add request to active set
+	nm.lastActivity = time.Now()             // Update last activity time
+}
+
+// RequestFinished should be called when a network request completes (success or failure).
+func (nm *NetworkMonitor) RequestFinished(requestID network.RequestID) {
+	nm.mu.Lock()
+	defer nm.mu.Unlock()
+	delete(nm.activeRequests, requestID) // Remove request from active set
+	nm.lastActivity = time.Now()         // Update last activity time
+}
+
+// IsIdle checks if there are no active requests and no activity for the idle threshold.
+func (nm *NetworkMonitor) IsIdle() bool {
+	nm.mu.Lock()
+	defer nm.mu.Unlock()
+	return len(nm.activeRequests) == 0 && time.Since(nm.lastActivity) > nm.idleThreshold
+}
+
+// WaitUntilIdle blocks until the network is considered idle or the context is cancelled.
+func (nm *NetworkMonitor) WaitUntilIdle(ctx context.Context) error {
+	for {
+		select {
+		case <-ctx.Done(): // If the main context is cancelled, stop waiting
+			return ctx.Err()
+		case <-nm.idleChan: // Received an idle signal from the monitor goroutine
+			if nm.IsIdle() { // Double-check if still idle (race condition safeguard)
+				return nil
+			}
+			// If not idle anymore (e.g., new request started immediately after signal), continue waiting.
+		case <-time.After(nm.idleThreshold / 2): // Periodically check even without a signal
+			if nm.IsIdle() {
+				return nil
+			}
+		}
+	}
+}
+
+// monitorIdle continuously checks the network state and signals on idleChan when idle.
+func (nm *NetworkMonitor) monitorIdle() {
+	// Check more frequently than the idle threshold to be responsive.
+	ticker := time.NewTicker(nm.idleThreshold / 4)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if nm.IsIdle() {
+			select {
+			case nm.idleChan <- struct{}{}: // Attempt to send an idle signal
+				// Signal sent successfully
+			default:
+				// Channel is full, meaning a signal was already sent and not yet consumed,
+				// or the WaitUntilIdle is already processing it.
+			}
+		}
+	}
+}
+
+func main_() {
+	// Create a new chromedp context.
+	// chromedp.WithDebugf(log.Printf) can be added here for detailed browser logs.
+	ctx, cancel := chromedp.NewContext(context.Background())
+	defer cancel() // Ensure the browser context is cancelled when main exits
+
+	// Create a context with an overall timeout for the entire operation.
+	// This prevents the program from hanging indefinitely.
+	ctx, cancel = context.WithTimeout(ctx, 60*time.Second) // 60 seconds timeout
+	defer cancel()
+
+	var (
+		requestsMu sync.Mutex // Mutex to protect access to the 'requests' slice
+		requests   []string   // Slice to store the URLs of all captured requests
+	)
+
+	// Initialize the network monitor with a 2-second idle threshold.
+	// This means the page is considered idle if no new requests are started for 2 seconds.
+	networkMonitor := NewNetworkMonitor(2 * time.Second)
+
+	// Listen for network events from the chromedp target (the browser page).
+	chromedp.ListenTarget(ctx, func(ev interface{}) {
+		switch ev := ev.(type) {
+		case *network.EventRequestWillBeSent:
+			// Capture the URL of the request.
+			requestsMu.Lock()
+			requests = append(requests, ev.Request.URL)
+			requestsMu.Unlock()
+			// Inform the network monitor that a request has started.
+			networkMonitor.RequestStarted(ev.RequestID)
+			// Uncomment the line below to see requests in real-time as they are made.
+			// fmt.Printf("Request: %s\n", ev.Request.URL)
+		case *network.EventResponseReceived:
+			// Inform the network monitor that a request has received a response.
+			networkMonitor.RequestFinished(ev.RequestID)
+		case *network.EventLoadingFinished:
+			// Inform the network monitor that a resource has finished loading.
+			networkMonitor.RequestFinished(ev.RequestID)
+		case *network.EventLoadingFailed:
+			// Inform the network monitor that a resource failed to load.
+			networkMonitor.RequestFinished(ev.RequestID)
+		}
+	})
+
+	// Define the browser tasks to be executed.
+	err := chromedp.Run(ctx,
+		network.Enable(),           // Enable network monitoring in the browser
+		network.SetCacheEnabled(false), // Disable browser cache to ensure all requests are live
+		chromedp.Navigate(`https://www.yahoo.com`), // Navigate to Yahoo.com
+		// Use an ActionFunc to integrate our custom network idle waiting logic.
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			log.Println("Waiting for network to become idle...")
+			return networkMonitor.WaitUntilIdle(ctx) // Block until the network is idle
+		}),
+	)
+
+	if err != nil {
+		log.Fatalf("Failed to navigate or capture requests: %v", err)
+	}
+
+	// Lock to safely access the collected requests slice before printing.
+	requestsMu.Lock()
+	defer requestsMu.Unlock()
+
+	fmt.Println("\n--- Captured Async Requests (URLs) ---")
+	for i, reqURL := range requests {
+		fmt.Printf("%d: %s\n", i+1, reqURL)
+	}
+
+	fmt.Printf("\nTotal requests captured: %d\n", len(requests))
+}
+
