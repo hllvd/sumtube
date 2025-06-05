@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -55,9 +56,11 @@ func (c *Caption) Download(targetPath string) error {
 }
 
 func listVideoCaptions(videoID string) ([]Caption, error) {
- url := baseURL + videoID + "&cc_load_policy=1"
- println("url : ", url)
- resp, err := http.Get(url)
+ urlApi := baseURL + videoID + "&cc_load_policy=1"
+ println("url : ", urlApi)
+ proxyUrl, _ := url.Parse("http://api06c9cad29d4edd53:RNW78Fm5@res.proxy-seller.com:10017")
+ client := &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(proxyUrl)}}
+ resp, err := client.Get(urlApi)
  if err != nil {
   return nil, fmt.Errorf("unable to download video page: %w", err)
  }
