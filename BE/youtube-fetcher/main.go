@@ -1,124 +1,119 @@
 package main
 
 import (
-	"encoding/json"
+	"encoding/xml"
 	"fmt"
-	"io"
-	"log"
-	"net/http"
-	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
+	"time"
+
+	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/launcher"
+	"github.com/go-rod/rod/lib/proto"
 )
 
-const baseURL = "https://www.youtube.com/watch?v="
-
-type ytInitialPlayerResponse struct {
-  Captions struct {
-    PlayerCaptionsTracklistRenderer struct {
-    CaptionTracks []struct {
-      BaseUrl      string `json:"baseUrl"`
-      LanguageCode string `json:"languageCode"`
-    } `json:"captionTracks"`
-    } `json:"playerCaptionsTracklistRenderer"`
-  } `json:"captions"`
+type Transcript struct {
+	XMLName xml.Name `xml:"transcript"`
+	Texts   []Text   `xml:"text"`
 }
 
-type Caption struct {
-  BaseUrl      string
-  LanguageCode string
-}
-
-func (c *Caption) Download(targetPath string) error {
-  resp, err := http.Get(c.BaseUrl)
-  if err != nil {
-    return fmt.Errorf("unable to download caption: %w", err)
-  }
-
-  defer resp.Body.Close()
-
-  file, err := os.Create(targetPath)
-  if err != nil {
-    return fmt.Errorf("unable to create file: %w", err)
-  }
-
-  defer file.Close()
-
-  _, err = io.Copy(file, resp.Body)
-  if err != nil {
-    return fmt.Errorf("unable to write file: %w", err)
-  }
-
-  return nil
-}
-
-func listVideoCaptions(videoID string) ([]Caption, error) {
-  urlApi := baseURL + videoID // + "&cc_load_policy=1"
-  println("url : ", urlApi)
-  proxyUrl, _ := url.Parse("http://api06c9cad29d4edd53:RNW78Fm5@res.proxy-seller.com:10017")
-  client := &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(proxyUrl)}}
-  resp, err := client.Get(baseURL + videoID)
-  if err != nil {
-    return nil, fmt.Errorf("unable to download video page: %w", err)
-  }
-
-  defer resp.Body.Close()
-
-  content, err := io.ReadAll(resp.Body)
-  if err != nil {
-    return nil, fmt.Errorf("unable to read response body: %w", err)
-  }
-
-  pageContent := string(content)
-
-  // Find ytInitialPlayerResponse variable
-  pageContentSplited := strings.Split(pageContent, "ytInitialPlayerResponse = ")
-  if len(pageContentSplited) < 2 {
-    return nil, fmt.Errorf("unable to find ytInitialPlayerResponse variable")
-  }
-
-  // Find the end of the variable
-  pageContentSplited = strings.Split(pageContentSplited[1], ";</script>")
-  if len(pageContentSplited) < 2 {
-    return nil, fmt.Errorf("unable to find the end of the ytInitialPlayerResponse variable")
-  }
-
-  ytInitialPlayerResponse := ytInitialPlayerResponse{}
-  err = json.Unmarshal([]byte(pageContentSplited[0]), &ytInitialPlayerResponse)
-  if err != nil {
-    return nil, fmt.Errorf("unable to unmarshal ytInitialPlayerResponse: %w", err)
-  }
-
-  captions := make([]Caption, 0, len(ytInitialPlayerResponse.Captions.PlayerCaptionsTracklistRenderer.CaptionTracks))
-  for _, caption := range ytInitialPlayerResponse.Captions.PlayerCaptionsTracklistRenderer.CaptionTracks {
-    captions = append(captions, Caption{
-    BaseUrl:      caption.BaseUrl,
-    LanguageCode: caption.LanguageCode,
-    })
-  }
-
-  return captions, nil
+type Text struct {
+	Start string `xml:"start,attr"`
+	Dur   string `xml:"dur,attr"`
+	Body  string `xml:",chardata"`
 }
 
 func main() {
- if len(os.Args) < 2 {
-  log.Fatalf("usage: %s <videoID>", filepath.Base(os.Args[0]))
- }
 
- videoID := os.Args[1]
+	u := launcher.New().
+    Headless(true).
+    Set("--mute-audio").
+    Set("--disable-blink-features", "AutomationControlled").
+    Set("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+        "(KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36").
+    MustLaunch()
 
- captions, err := listVideoCaptions(videoID)
- if err != nil {
-  log.Fatalf("unable to list video captions: %v", err)
- }
 
- for _, caption := range captions {
-  if caption.LanguageCode == "en" {
-   err := caption.Download(fmt.Sprintf("%s.xml", videoID))
-   if err != nil {
-    log.Printf("unable to download caption: %v", err)
-   }
-  }
- }
+	browser := rod.New().ControlURL(u).MustConnect()
+	defer browser.MustClose()
+
+	page := browser.MustPage("")
+	defer page.MustClose()
+
+	var candidateURLs []string
+
+	router := browser.HijackRequests()
+	router.Add("*", proto.NetworkResourceTypeXHR, func(ctx *rod.Hijack) {
+		requestURL := ctx.Request.URL().String()
+		if strings.Contains(requestURL, "timedtext") {
+			fmt.Println("Found timedtext URL:", requestURL)
+			candidateURLs = append(candidateURLs, requestURL)
+		}
+		ctx.ContinueRequest(&proto.FetchContinueRequest{})
+	})
+	
+	go router.Run()
+
+	page.MustNavigate("https://www.youtube.com/watch?v=mT0RNrTDHkI")
+	page.MustElement("video")
+	page.MustElement(".ytp-subtitles-button.ytp-button").MustClick()
+
+	time.Sleep(15 * time.Second)
+
+	if len(candidateURLs) == 0 {
+		fmt.Println("⚠️ No timedtext URLs captured")
+		return
+	}
+
+	var subtitleData []byte
+	var validURL string
+
+	// Try to fetch each candidate URL until one returns valid XML content
+	for _, url := range candidateURLs {
+		fmt.Println("Trying to download subtitle from:", url)
+	
+		js := fmt.Sprintf(`await fetch(%q).then(r => r.text())`, url)
+		data, err := page.Evaluate(rod.Eval(js))
+
+		if err != nil {
+			fmt.Println("❌ JS fetch failed:", err)
+			continue
+		}
+	
+		body := data.Value.Str()
+		subtitleData := []byte(body)
+	
+		var transcript Transcript
+		err = xml.Unmarshal(subtitleData, &transcript)
+		if err == nil && len(transcript.Texts) > 0 {
+			validURL = url
+			break
+		} else {
+			fmt.Println("⚠️ Not valid XML transcript or empty")
+		}
+	}
+	
+
+	if subtitleData == nil {
+		fmt.Println("⚠️ No valid subtitle XML found from captured URLs")
+		return
+	}
+
+	fmt.Println("✅ Using subtitle URL:", validURL)
+
+	os.WriteFile("subtitle.xml", subtitleData, 0644)
+	fmt.Println("✅ Saved subtitle.xml")
+
+	var transcript Transcript
+	if err := xml.Unmarshal(subtitleData, &transcript); err != nil {
+		panic(err)
+	}
+
+	var textBuilder strings.Builder
+	for _, line := range transcript.Texts {
+		textBuilder.WriteString(line.Body)
+		textBuilder.WriteString(" ")
+	}
+	os.WriteFile("subtitle.txt", []byte(textBuilder.String()), 0644)
+	fmt.Println("✅ Saved subtitle.txt")
 }

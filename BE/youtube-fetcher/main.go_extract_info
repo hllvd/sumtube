@@ -1,0 +1,211 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+)
+
+const baseURL = "https://www.youtube.com/watch?v="
+
+type ytInitialPlayerResponse struct {
+  Captions struct {
+    PlayerCaptionsTracklistRenderer struct {
+    CaptionTracks []struct {
+      BaseUrl      string `json:"baseUrl"`
+      LanguageCode string `json:"languageCode"`
+    } `json:"captionTracks"`
+    } `json:"playerCaptionsTracklistRenderer"`
+  } `json:"captions"`
+}
+
+type Caption struct {
+  BaseUrl      string
+  LanguageCode string
+}
+
+func (c *Caption) Download(targetPath string) error {
+  resp, err := http.Get(c.BaseUrl)
+  if err != nil {
+    return fmt.Errorf("unable to download caption: %w", err)
+  }
+
+  defer resp.Body.Close()
+
+  file, err := os.Create(targetPath)
+  if err != nil {
+    return fmt.Errorf("unable to create file: %w", err)
+  }
+
+  defer file.Close()
+
+  _, err = io.Copy(file, resp.Body)
+  if err != nil {
+    return fmt.Errorf("unable to write file: %w", err)
+  }
+
+  return nil
+}
+
+// Full nested structure (matches input JSON)
+type rawInfo struct {
+	Microformat struct {
+		PlayerMicroformatRenderer struct {
+			Title             struct{ SimpleText string } `json:"title"`
+			ViewCount         string                     `json:"viewCount"`
+			ExternalChannelID string                     `json:"externalChannelId"`
+			OwnerChannelName  string                     `json:"ownerChannelName"`
+			OwnerProfileURL   string                     `json:"ownerProfileUrl"`
+			PublishDate       string                     `json:"publishDate"`
+			Category          string                     `json:"category"`
+		} `json:"playerMicroformatRenderer"`
+	} `json:"microformat"`
+	Captions struct {
+		PlayerCaptionsTracklistRenderer struct {
+			CaptionTracks []struct {
+				BaseURL string `json:"baseUrl"`
+			} `json:"captionTracks"`
+		} `json:"playerCaptionsTracklistRenderer"`
+	} `json:"captions"`
+}
+
+// Flattened version you want to return
+type FlatInfo struct {
+	Title             string
+	ViewCount         string
+	ExternalChannelID string
+	OwnerChannelName  string
+	OwnerProfileURL   string
+	PublishDate       string
+	Category          string
+	CaptionURLs       []string
+}
+
+// Converts the rawInfo struct into a flat version
+func extractInfo(data []byte) (*FlatInfo, error) {
+	var raw rawInfo
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+
+	flat := FlatInfo{
+		Title:             raw.Microformat.PlayerMicroformatRenderer.Title.SimpleText,
+		ViewCount:         raw.Microformat.PlayerMicroformatRenderer.ViewCount,
+		ExternalChannelID: raw.Microformat.PlayerMicroformatRenderer.ExternalChannelID,
+		OwnerChannelName:  raw.Microformat.PlayerMicroformatRenderer.OwnerChannelName,
+		OwnerProfileURL:   raw.Microformat.PlayerMicroformatRenderer.OwnerProfileURL,
+		PublishDate:       raw.Microformat.PlayerMicroformatRenderer.PublishDate,
+		Category:          raw.Microformat.PlayerMicroformatRenderer.Category,
+	}
+
+	for _, track := range raw.Captions.PlayerCaptionsTracklistRenderer.CaptionTracks {
+		flat.CaptionURLs = append(flat.CaptionURLs, track.BaseURL)
+	}
+
+	return &flat, nil
+}
+
+func listVideoCaptions(videoID string) ([]Caption, error) {
+  urlApi := baseURL + videoID // + "&cc_load_policy=1"
+  println("url : ", urlApi)
+  
+  var client *http.Client
+  proxyStr := os.Getenv("PROXY_SERVER")
+
+  if proxyStr != "" {
+    proxyURL, err := url.Parse(proxyStr)
+    if err != nil {
+      log.Fatalf("invalid proxy URL: %v", err)
+    }
+    client = &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL)}}
+  }else{
+    client = http.DefaultClient
+  }
+ 
+  resp, err := client.Get(baseURL + videoID)
+  if err != nil {
+    return nil, fmt.Errorf("unable to download video page: %w", err)
+  }
+
+  defer resp.Body.Close()
+
+  content, err := io.ReadAll(resp.Body)
+  if err != nil {
+    return nil, fmt.Errorf("unable to read response body: %w", err)
+  }
+
+  pageContent := string(content)
+
+  // Find ytInitialPlayerResponse variable
+  pageContentSplited := strings.Split(pageContent, "ytInitialPlayerResponse = ")
+  if len(pageContentSplited) < 2 {
+    return nil, fmt.Errorf("unable to find ytInitialPlayerResponse variable")
+  }
+
+  // Find the end of the variable
+  pageContentSplited = strings.Split(pageContentSplited[1], ";</script>")
+  if len(pageContentSplited) < 2 {
+    return nil, fmt.Errorf("unable to find the end of the ytInitialPlayerResponse variable")
+  }
+
+  //fmt.Println("pageContentSplited",pageContentSplited[0])
+
+  
+
+  videoInfo, err := extractInfo([]byte(pageContentSplited[0]))
+  jsonBytes, err := json.MarshalIndent(videoInfo, "", "  ")
+  if err != nil {
+      log.Fatalf("error marshaling: %v", err)
+  }
+  fmt.Println(string(jsonBytes))
+
+  ytInitialPlayerResponse := ytInitialPlayerResponse{}
+  err = json.Unmarshal([]byte(pageContentSplited[0]), &ytInitialPlayerResponse)
+  if err != nil {
+    return nil, fmt.Errorf("unable to unmarshal ytInitialPlayerResponse: %w", err)
+  }
+
+  
+
+  captions := make([]Caption, 0, len(ytInitialPlayerResponse.Captions.PlayerCaptionsTracklistRenderer.CaptionTracks))
+  for _, caption := range ytInitialPlayerResponse.Captions.PlayerCaptionsTracklistRenderer.CaptionTracks {
+    captions = append(captions, Caption{
+    BaseUrl:      caption.BaseUrl,
+    LanguageCode: caption.LanguageCode,
+    })
+  }
+
+  return captions, nil
+}
+
+
+
+func main() {
+ if len(os.Args) < 2 {
+  log.Fatalf("usage: %s <videoID>", filepath.Base(os.Args[0]))
+ }
+
+ videoID := os.Args[1]
+
+ captions, err := listVideoCaptions(videoID)
+ if err != nil {
+  log.Fatalf("unable to list video captions: %v", err)
+ }
+ allowedLangs := []string{"pt", "en", "es", "it", "fr"}
+ for _, caption := range captions {
+  
+  if slices.Contains(allowedLangs, caption.LanguageCode) {
+   err := caption.Download(fmt.Sprintf("%s.xml", videoID))
+   if err != nil {
+    log.Printf("unable to download caption: %v", err)
+   }
+  }
+ }
+}
