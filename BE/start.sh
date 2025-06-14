@@ -34,6 +34,7 @@ case $action in
         lsof -ti :8080 | xargs -r kill -9
         lsof -ti :8081 | xargs -r kill -9
         lsof -ti :5050 | xargs -r kill -9
+        lsof -ti :6060 | xargs -r kill -9
         ;;
         
     *)

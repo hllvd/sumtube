@@ -10,7 +10,10 @@ import (
 	"os"
 	"slices"
 	"strings"
+
+	"github.com/google/uuid"
 )
+
 
 const baseURL = "https://www.youtube.com/watch?v="
 
@@ -172,6 +175,7 @@ func metadataHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	fmt.Println("UUID Example:", uuid.NewString())
 	http.HandleFunc("/metadata", metadataHandler)
 
 	port := "6060"
