@@ -1,119 +1,180 @@
 package main
 
 import (
-	"encoding/xml"
+	"encoding/json"
 	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"net/url"
 	"os"
+	"slices"
 	"strings"
-	"time"
-
-	"github.com/go-rod/rod"
-	"github.com/go-rod/rod/lib/launcher"
-	"github.com/go-rod/rod/lib/proto"
 )
 
-type Transcript struct {
-	XMLName xml.Name `xml:"transcript"`
-	Texts   []Text   `xml:"text"`
+const baseURL = "https://www.youtube.com/watch?v="
+
+type ytInitialPlayerResponse struct {
+	Captions struct {
+		PlayerCaptionsTracklistRenderer struct {
+			CaptionTracks []struct {
+				BaseUrl      string `json:"baseUrl"`
+				LanguageCode string `json:"languageCode"`
+			} `json:"captionTracks"`
+		} `json:"playerCaptionsTracklistRenderer"`
+	} `json:"captions"`
 }
 
-type Text struct {
-	Start string `xml:"start,attr"`
-	Dur   string `xml:"dur,attr"`
-	Body  string `xml:",chardata"`
+type Caption struct {
+	BaseUrl      string `json:"base_url"`
+	LanguageCode string `json:"lang"`
+}
+
+type rawInfo struct {
+	Microformat struct {
+		PlayerMicroformatRenderer struct {
+			Title             struct{ SimpleText string } `json:"title"`
+			ViewCount         string                     `json:"viewCount"`
+			ExternalChannelID string                     `json:"externalChannelId"`
+			OwnerChannelName  string                     `json:"ownerChannelName"`
+			OwnerProfileURL   string                     `json:"ownerProfileUrl"`
+			PublishDate       string                     `json:"publishDate"`
+			Category          string                     `json:"category"`
+		} `json:"playerMicroformatRenderer"`
+	} `json:"microformat"`
+	Captions struct {
+		PlayerCaptionsTracklistRenderer struct {
+			CaptionTracks []struct {
+				BaseURL string `json:"baseUrl"`
+			} `json:"captionTracks"`
+		} `json:"playerCaptionsTracklistRenderer"`
+	} `json:"captions"`
+}
+
+type FlatInfo struct {
+	Title             string    `json:"title"`
+	ViewCount         string    `json:"view_count"`
+	ExternalChannelID string    `json:"channel_id"`
+	OwnerChannelName  string    `json:"channel_name"`
+	OwnerProfileURL   string    `json:"channel_url"`
+	PublishDate       string    `json:"publish_date"`
+	Category          string    `json:"category"`
+	Captions          []Caption `json:"captions"`
+}
+
+func extractInfo(data []byte) (*FlatInfo, error) {
+	var raw rawInfo
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+
+	info := FlatInfo{
+		Title:             raw.Microformat.PlayerMicroformatRenderer.Title.SimpleText,
+		ViewCount:         raw.Microformat.PlayerMicroformatRenderer.ViewCount,
+		ExternalChannelID: raw.Microformat.PlayerMicroformatRenderer.ExternalChannelID,
+		OwnerChannelName:  raw.Microformat.PlayerMicroformatRenderer.OwnerChannelName,
+		OwnerProfileURL:   raw.Microformat.PlayerMicroformatRenderer.OwnerProfileURL,
+		PublishDate:       raw.Microformat.PlayerMicroformatRenderer.PublishDate,
+		Category:          raw.Microformat.PlayerMicroformatRenderer.Category,
+		Captions:          []Caption{},
+	}
+
+	return &info, nil
+}
+
+func fetchVideoInfo(videoID string) (*FlatInfo, error) {
+	client := http.DefaultClient
+
+	proxyStr := os.Getenv("PROXY_SERVER")
+	if proxyStr != "" {
+		proxyURL, err := url.Parse(proxyStr)
+		if err != nil {
+			log.Fatalf("invalid proxy URL: %v", err)
+		}
+		client = &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL)}}
+	}
+
+	resp, err := client.Get(baseURL + videoID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch video page: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read response: %w", err)
+	}
+
+	content := string(body)
+
+	split := strings.Split(content, "ytInitialPlayerResponse = ")
+	if len(split) < 2 {
+		return nil, fmt.Errorf("ytInitialPlayerResponse not found")
+	}
+	split = strings.Split(split[1], ";</script>")
+	if len(split) < 1 {
+		return nil, fmt.Errorf("ytInitialPlayerResponse end not found")
+	}
+
+	jsonData := split[0]
+
+	// Extract info
+	info, err := extractInfo([]byte(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("error extracting info: %w", err)
+	}
+
+	// Extract captions
+	var captions ytInitialPlayerResponse
+	if err := json.Unmarshal([]byte(jsonData), &captions); err != nil {
+		return nil, fmt.Errorf("error parsing captions: %w", err)
+	}
+
+	for _, c := range captions.Captions.PlayerCaptionsTracklistRenderer.CaptionTracks {
+		info.Captions = append(info.Captions, Caption{
+			BaseUrl:      c.BaseUrl,
+			LanguageCode: c.LanguageCode,
+		})
+	}
+
+	return info, nil
+}
+
+func metadataHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	vid := r.URL.Query().Get("vid")
+	if vid == "" {
+		http.Error(w, "Missing 'vid' query parameter", http.StatusBadRequest)
+		return
+	}
+
+	info, err := fetchVideoInfo(vid)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error fetching metadata: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	allowedLangs := []string{"pt", "en", "es", "it", "fr"}
+	filteredCaptions := []Caption{}
+	for _, c := range info.Captions {
+		if slices.Contains(allowedLangs, c.LanguageCode) {
+			filteredCaptions = append(filteredCaptions, c)
+		}
+	}
+	info.Captions = filteredCaptions
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(info)
 }
 
 func main() {
+	http.HandleFunc("/metadata", metadataHandler)
 
-	u := launcher.New().
-    Headless(true).
-    Set("--mute-audio").
-    Set("--disable-blink-features", "AutomationControlled").
-    Set("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-        "(KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36").
-    MustLaunch()
-
-
-	browser := rod.New().ControlURL(u).MustConnect()
-	defer browser.MustClose()
-
-	page := browser.MustPage("")
-	defer page.MustClose()
-
-	var candidateURLs []string
-
-	router := browser.HijackRequests()
-	router.Add("*", proto.NetworkResourceTypeXHR, func(ctx *rod.Hijack) {
-		requestURL := ctx.Request.URL().String()
-		if strings.Contains(requestURL, "timedtext") {
-			fmt.Println("Found timedtext URL:", requestURL)
-			candidateURLs = append(candidateURLs, requestURL)
-		}
-		ctx.ContinueRequest(&proto.FetchContinueRequest{})
-	})
-	
-	go router.Run()
-
-	page.MustNavigate("https://www.youtube.com/watch?v=mT0RNrTDHkI")
-	page.MustElement("video")
-	page.MustElement(".ytp-subtitles-button.ytp-button").MustClick()
-
-	time.Sleep(15 * time.Second)
-
-	if len(candidateURLs) == 0 {
-		fmt.Println("⚠️ No timedtext URLs captured")
-		return
-	}
-
-	var subtitleData []byte
-	var validURL string
-
-	// Try to fetch each candidate URL until one returns valid XML content
-	for _, url := range candidateURLs {
-		fmt.Println("Trying to download subtitle from:", url)
-	
-		js := fmt.Sprintf(`await fetch(%q).then(r => r.text())`, url)
-		data, err := page.Evaluate(rod.Eval(js))
-
-		if err != nil {
-			fmt.Println("❌ JS fetch failed:", err)
-			continue
-		}
-	
-		body := data.Value.Str()
-		subtitleData := []byte(body)
-	
-		var transcript Transcript
-		err = xml.Unmarshal(subtitleData, &transcript)
-		if err == nil && len(transcript.Texts) > 0 {
-			validURL = url
-			break
-		} else {
-			fmt.Println("⚠️ Not valid XML transcript or empty")
-		}
-	}
-	
-
-	if subtitleData == nil {
-		fmt.Println("⚠️ No valid subtitle XML found from captured URLs")
-		return
-	}
-
-	fmt.Println("✅ Using subtitle URL:", validURL)
-
-	os.WriteFile("subtitle.xml", subtitleData, 0644)
-	fmt.Println("✅ Saved subtitle.xml")
-
-	var transcript Transcript
-	if err := xml.Unmarshal(subtitleData, &transcript); err != nil {
-		panic(err)
-	}
-
-	var textBuilder strings.Builder
-	for _, line := range transcript.Texts {
-		textBuilder.WriteString(line.Body)
-		textBuilder.WriteString(" ")
-	}
-	os.WriteFile("subtitle.txt", []byte(textBuilder.String()), 0644)
-	fmt.Println("✅ Saved subtitle.txt")
+	port := "6060"
+	fmt.Printf("Server running on http://localhost:%s/metadata\n", port)
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
