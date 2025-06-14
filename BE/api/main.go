@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -151,16 +152,17 @@ func downloadSubtitle(videoURL string, lang string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to extract video ID: %w", err)
 	}
-	outputTemplate := filepath.Join(tempDir, "%(id)s.%(ext)s")
 
-	// First try with the requested language
+	outputTemplate := filepath.Join(tempDir, "%s.srt") // Template for saving file
+
+	// Try to download in the requested language
 	fmt.Printf("Attempting to download subtitles in language '%s'...\n", lang)
 	subtitle, err := tryDownloadSubtitle(videoURL, videoID, outputTemplate, lang)
 	if err == nil {
 		return subtitle, nil
 	}
 
-	// If the first attempt failed and the requested language wasn't English, try with English
+	// If failed, try with English
 	if lang != "en" {
 		fmt.Printf("Failed to download subtitles in language '%s', trying English instead...\n", lang)
 		subtitle, err = tryDownloadSubtitle(videoURL, videoID, outputTemplate, "en")
@@ -169,11 +171,55 @@ func downloadSubtitle(videoURL string, lang string) (string, error) {
 		}
 	}
 
-	// If both attempts failed, return the original error
+	// If both attempts fail, return error
 	return "", fmt.Errorf("failed to download subtitles in either '%s' or 'en': %w", lang, err)
 }
 
+// tryDownloadSubtitle requests subtitles from the internal transcript server and saves them to disk.
+
 func tryDownloadSubtitle(videoURL, videoID, outputTemplate, lang string) (string, error) {
+	baseURL := "http://youtube-transcript-server:5050/transcript"
+	query := url.Values{}
+	query.Set("vid", videoID)
+	query.Set("lang", lang)
+	query.Set("format", "srt")
+
+	fullURL := fmt.Sprintf("%s?%s", baseURL, query.Encode())
+
+	// Create a POST request with no body (nil), but with query parameters
+	req, err := http.NewRequest("POST", fullURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Send request using default HTTP client
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to request subtitle: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check status code
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("subtitle server returned status %d", resp.StatusCode)
+	}
+
+	// Read subtitle data
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read subtitle data: %w", err)
+	}
+
+	// Save to file
+	subtitlePath := filepath.Join(tempDir, fmt.Sprintf("%s.%s.srt", videoID, lang))
+	if err := ioutil.WriteFile(subtitlePath, data, 0644); err != nil {
+		return "", fmt.Errorf("failed to write subtitle file: %w", err)
+	}
+
+	return string(data), nil
+}
+
+func tryDownloadSubtitle_yt_dlp(videoURL, videoID, outputTemplate, lang string) (string, error) {
 	// Get proxy from environment
 	proxy := os.Getenv("YDT_PROXY_SERVER")
 
@@ -397,8 +443,26 @@ func listPromptsDir(promptsDir string) error {
 }
 
 
-// ExtractLastTimestamp recebe o conteúdo da legenda e retorna o último timestamp (como string ou time.Duration)
+// ExtractLastTimestamp extracts the last end timestamp from SRT content
 func ExtractLastTimestamp(content string) (string, error) {
+	re := regexp.MustCompile(`(\d{1,2}:\d{2}:\d{2}),\d{3}\s*-->\s*(\d{1,2}:\d{2}:\d{2}),\d{3}`)
+	matches := re.FindAllStringSubmatch(content, -1)
+
+	if len(matches) == 0 {
+		return "", fmt.Errorf("no timestamp found")
+	}
+
+	lastTimestamp := matches[len(matches)-1][2]
+	return lastTimestamp, nil
+}
+
+// TestCase holds input and expected output
+type TestCase struct {
+	name     string
+	input    string
+	expected string
+}
+func ExtractLastTimestamp_yt_dlp(content string) (string, error) {
     re := regexp.MustCompile(`\d{2}:\d{2}:\d{2}\.\d{3} --> (\d{2}:\d{2}:\d{2})\.\d{3}`)
     matches := re.FindAllStringSubmatch(content, -1)
 
@@ -786,8 +850,10 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
                 log.Printf("Error downloading subtitle: %v\n", err)
                 return
             }
+			fmt.Println("subtitle",subtitle)
 
-            subtitleSanitized = sanitizeSubtitle(subtitle)
+			//subtitleSanitized = sanitizeSubtitle(subtitle)
+            subtitleSanitized = (subtitle)
 
             if err := uploadToS3(subtitleSanitized, subtitleKey); err != nil {
                 log.Printf("Error uploading subtitle to S3: %v\n", err)
@@ -795,6 +861,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         }
 
         summary, err := summarizeText(subtitleSanitized, requestBody.Language, title)
+		fmt.Println("summary",summary)
         if err != nil {
             log.Printf("Error summarizing caption: %v\n", err)
             return
