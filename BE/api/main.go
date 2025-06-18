@@ -97,11 +97,11 @@ type VideoMetadata struct {
 	LikeCount   int      `json:"like_count"`
 }
 
-func getVideoMetadata(videoURL string) (string, string, string, string, float64, string, string, int, error) {
-	// Get the proxy server from environment variable
+
+
+func getVideoMetadata(videoURL string) (*VideoMetadata, error) {
 	proxy := os.Getenv("YDT_PROXY_SERVER")
 
-	// Build yt-dlp command arguments
 	args := []string{"--dump-json"}
 	if proxy != "" {
 		args = append(args, "--proxy", proxy)
@@ -111,29 +111,22 @@ func getVideoMetadata(videoURL string) (string, string, string, string, float64,
 	cmd := exec.Command("yt-dlp", args...)
 	output, err := cmd.Output()
 	if err != nil {
-		return "", "", "", "", 0, "", "", 0, fmt.Errorf("failed to run yt-dlp: %w", err)
+		return nil, fmt.Errorf("failed to run yt-dlp: %w", err)
 	}
 
 	var metadata VideoMetadata
 	if err := json.Unmarshal(output, &metadata); err != nil {
-		return "", "", "", "", 0, "", "", 0, fmt.Errorf("failed to parse metadata: %w", err)
+		return nil, fmt.Errorf("failed to parse metadata: %w", err)
 	}
 
-	category := ""
-	if len(metadata.Categories) > 0 {
-		category = metadata.Categories[0]
+	// Handle category fallback
+	if len(metadata.Categories) == 0 {
+		metadata.Categories = []string{""}
 	}
 
-	return metadata.Title,
-		metadata.Language,
-		metadata.UploaderID,
-		metadata.UploadDate,
-		metadata.Duration,
-		metadata.ChannelID,
-		category,
-		metadata.LikeCount,
-		nil
+	return &metadata, nil
 }
+
 
 func convertTitleToURL(title string) string {
 	lowercaseTitle := strings.ToLower(title)
@@ -804,13 +797,23 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
     }
 	println("NO CACHED DATA", force)
     // Get basic metadata first (synchronous)
-    title, videoLanguage, uploaderID, uploadDate, duration, channelID, category, likeCounter, videoMetadataErr := getVideoMetadata(videoURL)
-    if videoMetadataErr != nil {
-        http.Error(w, fmt.Sprintf("Error fetching video metadata: %v", videoMetadataErr), http.StatusInternalServerError)
-        return
-    }
+    metadata, err := getVideoMetadata(videoURL)
+	if err != nil {
+		log.Fatalf("Error fetching metadata: %v", err)
+	}
 
-	
+	// Access each property:
+	title := metadata.Title
+	videoLanguage := metadata.Language
+	uploaderID := metadata.UploaderID
+	uploadDate := metadata.UploadDate
+	duration := metadata.Duration
+	channelID := metadata.ChannelID
+	category := ""
+	if len(metadata.Categories) > 0 {
+		category = metadata.Categories[0]
+	}
+	likeCounter := metadata.LikeCount
 
     // Immediate response with processing status including all metadata
     initialResponse := HandleSummaryRequestResponse{
