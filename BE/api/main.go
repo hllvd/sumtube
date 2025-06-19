@@ -86,44 +86,70 @@ func extractVideoID(url string) (string, error) {
 	return matches[1], nil
 }
 
+type Caption struct {
+	BaseURL string `json:"base_url"`
+	Lang    string `json:"lang"`
+}
+
 type VideoMetadata struct {
-	Title       string   `json:"title"`
-	Language    string   `json:"language"`
-	UploaderID  string   `json:"uploader_id"`
-	UploadDate  string   `json:"upload_date"`
-	Duration    float64  `json:"duration"`
-	ChannelID   string   `json:"channel_id"`
-	Categories  []string `json:"categories"`
-	LikeCount   int      `json:"like_count"`
+	Title        string    `json:"title"`
+	ViewCount    string    `json:"view_count"`
+	LengthSeconds string   `json:"length_seconds"`
+	ChannelID    string    `json:"channel_id"`
+	ChannelName  string    `json:"channel_name"`
+	ChannelURL   string    `json:"channel_url"`
+	PublishDate  string    `json:"publish_date"`
+	Category     string    `json:"category"`
+	Captions     []Caption `json:"captions"`
 }
 
 
 
 func getVideoMetadata(videoURL string) (*VideoMetadata, error) {
-	proxy := os.Getenv("YDT_PROXY_SERVER")
-
-	args := []string{"--dump-json"}
-	if proxy != "" {
-		args = append(args, "--proxy", proxy)
-	}
-	args = append(args, videoURL)
-
-	cmd := exec.Command("yt-dlp", args...)
-	output, err := cmd.Output()
+	// proxy := os.Getenv("YDT_PROXY_SERVER")
+	
+	videoID, err := extractVideoID(videoURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to run yt-dlp: %w", err)
+		return nil, fmt.Errorf("failed to extract video ID: %w", err)
+	}
+
+	baseURL := "http://youtube-metadata-server:6060/metadata"
+	query := url.Values{}
+	query.Set("vid", videoID)
+
+
+	fullURL := fmt.Sprintf("%s?%s", baseURL, query.Encode())
+
+	// Create a POST request with no body (nil), but with query parameters
+	req, err := http.NewRequest("POST", fullURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Send request using default HTTP client
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to request subtitle: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check status code
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("subtitle server returned status %d", resp.StatusCode)
+	}
+
+	// Read subtitle data
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read subtitle data: %w", err)
 	}
 
 	var metadata VideoMetadata
-	if err := json.Unmarshal(output, &metadata); err != nil {
-		return nil, fmt.Errorf("failed to parse metadata: %w", err)
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return nil, fmt.Errorf("failed to parse metadata JSON: %w", err)
 	}
 
-	// Handle category fallback
-	if len(metadata.Categories) == 0 {
-		metadata.Categories = []string{""}
-	}
-
+	fmt.Print("metadata", metadata)
 	return &metadata, nil
 }
 
@@ -318,7 +344,7 @@ func pushSummaryToDynamoDB(data HandleSummaryRequestResponse, summary string, pa
         "status":       &dynamodbtypes.AttributeValueMemberS{Value: data.Status},
         "uploader_id":  &dynamodbtypes.AttributeValueMemberS{Value: data.UploaderID},
         "upload_date":  &dynamodbtypes.AttributeValueMemberS{Value: data.UploadDate},
-        "duration":     &dynamodbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%f", data.Duration)},
+        "duration":     &dynamodbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", float64(data.Duration))},
         "channel_id":   &dynamodbtypes.AttributeValueMemberS{Value: data.ChannelID},
         "category":     &dynamodbtypes.AttributeValueMemberS{Value: data.Category},
         "video_lang":   &dynamodbtypes.AttributeValueMemberS{Value: data.VideoLang},
@@ -673,7 +699,7 @@ type HandleSummaryRequestResponse struct {
 	Status      string  `json:"status"`
 	UploaderID  string  `json:"uploader_id"`
 	UploadDate  string  `json:"upload_date"`
-	Duration    float64 `json:"duration"`
+	Duration    int `json:"duration"`
 	ChannelID   string  `json:"channel_id"`
 	Category    string  `json:"category"`
 	VideoLang   string  `json:"video_lang"`
@@ -804,16 +830,17 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Access each property:
 	title := metadata.Title
-	videoLanguage := metadata.Language
-	uploaderID := metadata.UploaderID
-	uploadDate := metadata.UploadDate
-	duration := metadata.Duration
+	videoLanguage := metadata.Captions[0].Lang
+	uploaderID := metadata.ChannelID
+	uploadDate := metadata.PublishDate
+	duration := metadata.LengthSeconds
 	channelID := metadata.ChannelID
-	category := ""
-	if len(metadata.Categories) > 0 {
-		category = metadata.Categories[0]
-	}
-	likeCounter := metadata.LikeCount
+	category := metadata.Category
+	
+	likeCounter := metadata.ViewCount
+
+	durationInt, _ := strconv.Atoi(duration)
+	likeCountInt, _ := strconv.Atoi(likeCounter)
 
     // Immediate response with processing status including all metadata
     initialResponse := HandleSummaryRequestResponse{
@@ -823,11 +850,11 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         Status:      "processing",
         UploaderID:  uploaderID,
         UploadDate:  uploadDate,
-        Duration:    duration,
+        Duration:    durationInt,
         ChannelID:   channelID,
         Category:    category,
         VideoLang:   videoLanguage,
-		LikeCount:   likeCounter,
+		LikeCount:   likeCountInt,
     }
 	path := convertTitleToURL(title)
 	if err := pushSummaryToDynamoDB(
@@ -835,7 +862,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		"",  
 		path,
 	); err != nil {
-		http.Error(w, fmt.Sprintf("Error pushing to DynamoDB: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Error pushing to DynamoDB [1]: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -884,7 +911,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 			sanitizedSummary,
 			path,
 		); err != nil {
-			http.Error(w, fmt.Sprintf("Error pushing to DynamoDB: %v", err), http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("Error pushing to DynamoDB [2]: %v", err), http.StatusInternalServerError)
 			return
 		}
 

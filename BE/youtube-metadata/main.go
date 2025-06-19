@@ -38,6 +38,7 @@ type rawInfo struct {
 		PlayerMicroformatRenderer struct {
 			Title             struct{ SimpleText string } `json:"title"`
 			ViewCount         string                     `json:"viewCount"`
+			LengthSeconds     string                     `json:"lengthSeconds"`
 			ExternalChannelID string                     `json:"externalChannelId"`
 			OwnerChannelName  string                     `json:"ownerChannelName"`
 			OwnerProfileURL   string                     `json:"ownerProfileUrl"`
@@ -57,6 +58,7 @@ type rawInfo struct {
 type FlatInfo struct {
 	Title             string    `json:"title"`
 	ViewCount         string    `json:"view_count"`
+	LengthSeconds     string    `json:"length_seconds"`
 	ExternalChannelID string    `json:"channel_id"`
 	OwnerChannelName  string    `json:"channel_name"`
 	OwnerProfileURL   string    `json:"channel_url"`
@@ -71,9 +73,12 @@ func extractInfo(data []byte) (*FlatInfo, error) {
 		return nil, err
 	}
 
+	fmt.Print("data",data)
+
 	info := FlatInfo{
 		Title:             raw.Microformat.PlayerMicroformatRenderer.Title.SimpleText,
 		ViewCount:         raw.Microformat.PlayerMicroformatRenderer.ViewCount,
+		LengthSeconds:	   raw.Microformat.PlayerMicroformatRenderer.LengthSeconds,
 		ExternalChannelID: raw.Microformat.PlayerMicroformatRenderer.ExternalChannelID,
 		OwnerChannelName:  raw.Microformat.PlayerMicroformatRenderer.OwnerChannelName,
 		OwnerProfileURL:   raw.Microformat.PlayerMicroformatRenderer.OwnerProfileURL,
