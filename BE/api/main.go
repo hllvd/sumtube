@@ -828,9 +828,17 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		log.Fatalf("Error fetching metadata: %v", err)
 	}
 
+	var captionLang string
+	if len(metadata.Captions) > 0 {
+		captionLang = metadata.Captions[0].Lang
+	} else {
+		http.Error(w, "No subtitles found", http.StatusNotFound)
+		return
+	}
+
 	// Access each property:
 	title := metadata.Title
-	videoLanguage := metadata.Captions[0].Lang
+	videoLanguage := captionLang
 	uploaderID := metadata.ChannelID
 	uploadDate := metadata.PublishDate
 	duration := metadata.LengthSeconds
