@@ -343,13 +343,13 @@ func pushSummaryToDynamoDB(data HandleSummaryRequestResponse, summary string, pa
         "lang":         &dynamodbtypes.AttributeValueMemberS{Value: data.Lang},
         "status":       &dynamodbtypes.AttributeValueMemberS{Value: data.Status},
         "uploader_id":  &dynamodbtypes.AttributeValueMemberS{Value: data.UploaderID},
-        "upload_date":  &dynamodbtypes.AttributeValueMemberS{Value: data.UploadDate},
+        "video_upload_date":  &dynamodbtypes.AttributeValueMemberS{Value: data.UploadDate},			//yt publish date
         "duration":     &dynamodbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", float64(data.Duration))},
         "channel_id":   &dynamodbtypes.AttributeValueMemberS{Value: data.ChannelID},
         "category":     &dynamodbtypes.AttributeValueMemberS{Value: data.Category},
         "video_lang":   &dynamodbtypes.AttributeValueMemberS{Value: data.VideoLang},
         "summary":      &dynamodbtypes.AttributeValueMemberS{Value: summary},
-		"sum_datetime": &dynamodbtypes.AttributeValueMemberS{Value: dateTimeNow},
+		"article_update_datetime": &dynamodbtypes.AttributeValueMemberS{Value: time.Now().Format("2006-01-02 15:04:05")}, //sumtube publish timestamp
         "path":         &dynamodbtypes.AttributeValueMemberS{Value: path},
         "like_count":    &dynamodbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%d", data.LikeCount)},
     }
@@ -396,13 +396,17 @@ func pushCategoryStatsToDynamoDB(categoryName string, likes int, vid string, dat
 }
 
 func parseJSONContent(jsonString string) (map[string]string, error) {
+	log.Printf("Parsing JSON: %s", jsonString)
+    if strings.TrimSpace(jsonString) == "" {
+        return nil, fmt.Errorf("input JSON string is empty")
+    }
+
     var result map[string]string
-    
     err := json.Unmarshal([]byte(jsonString), &result)
     if err != nil {
         return nil, fmt.Errorf("error parsing JSON: %v", err)
     }
-    
+
     return result, nil
 }
 
@@ -698,7 +702,7 @@ type HandleSummaryRequestResponse struct {
 	Lang        string  `json:"lang"`
 	Status      string  `json:"status"`
 	UploaderID  string  `json:"uploader_id"`
-	UploadDate  string  `json:"upload_date"`
+	UploadDate  string  `json:"video_upload_date"`
 	Duration    int `json:"duration"`
 	ChannelID   string  `json:"channel_id"`
 	Category    string  `json:"category"`
@@ -717,7 +721,7 @@ type DynamoDbResponseToJson struct {
     Path       string `dynamodbav:"path" json:"path"`
     Status     string `dynamodbav:"status" json:"status"`
     UploaderID string `dynamodbav:"uploader_id" json:"uploaderId"`
-    UploadDate string `dynamodbav:"upload_date" json:"uploadDate"`
+    UploadDate string `dynamodbav:"video_upload_date" json:"uploadDate"`
     Duration   string `dynamodbav:"duration" json:"duration"` // or float64 if needed
 }
 
@@ -795,10 +799,11 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         if err == nil && cachedData != nil {
 			println("CACHED DATA", cachedData)
             // Parse the JSON content from DynamoDB
-
+			log.Printf("Parsing JSON from DynamoDB content: [%s]", dynamoDbResponse.Content)
 			jsonGeneratedByContent, errJson := parseJSONContent(dynamoDbResponse.Content)
-			if errJson != nil {
-				log.Printf("Error parsing summary field on db to json: %v", err)
+
+			if dynamoDbResponse.Content != "" && errJson != nil {
+				log.Printf("Error parsing summary field on db to json: %v", errJson)
 				return
 			}
 
@@ -810,7 +815,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
                 Lang:    dynamoDbResponse.Lang,
                 Answer:  jsonGeneratedByContent["answer"],
                 Path:    dynamoDbResponse.Path,
-                Status:  "completed", // Add status field
+                Status:  dynamoDbResponse.Status,
 				UploaderID: dynamoDbResponse.UploaderID,
 				UploadDate: dynamoDbResponse.UploadDate,
 				Duration: dynamoDbResponse.Duration,
@@ -828,12 +833,14 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		log.Fatalf("Error fetching metadata: %v", err)
 	}
 
+	var status string = "processing"
 	var captionLang string
 	if len(metadata.Captions) > 0 {
 		captionLang = metadata.Captions[0].Lang
 	} else {
-		http.Error(w, "No subtitles found", http.StatusNotFound)
-		return
+		status = "caps_not_found"
+		//http.Error(w, "No subtitles found", http.StatusNotFound)
+		//return
 	}
 
 	// Access each property:
@@ -855,7 +862,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         Vid:         videoID,
         Title:       title,
         Lang:        requestBody.Language,
-        Status:      "processing",
+        Status:      status,
         UploaderID:  uploaderID,
         UploadDate:  uploadDate,
         Duration:    durationInt,
@@ -996,7 +1003,7 @@ type GPTResponseToJson struct {
     Path    string `json:"path,omitempty"`
     Status  string `json:"status"` // Mandatory field
 	UploaderID string `json:"uploader_id,omitempty"`
-	UploadDate string `json:"upload_date,omitempty"`
+	UploadDate string `json:"video_upload_date,omitempty"`
 	Duration string `json:"duration,omitempty"`
 }
 // Handle Google OAuth2 redirect
