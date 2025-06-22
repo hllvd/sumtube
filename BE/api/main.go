@@ -920,7 +920,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 
         path := convertTitleToURL(title)
 		processedResponse := initialResponse
-		processedResponse.Status = "done"
+		processedResponse.Status = "completed"
         if err := pushSummaryToDynamoDB(
 			processedResponse,
 			sanitizedSummary,

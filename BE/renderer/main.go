@@ -686,7 +686,7 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
     uploaderId := result["uploader_id"].(string)
 
     uploadDate := ""
-    if date, ok := result["upload_date"].(string); ok && date != "" {
+    if date, ok := result["video_upload_date"].(string); ok && date != "" {
         uploadDate = formatDate(lang, date)
     }
 
