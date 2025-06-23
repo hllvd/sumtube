@@ -16,7 +16,10 @@ case $action in
             echo "Service go-server is running"
             docker-compose stop go-server
         fi
-
+        echo "building frontend"
+        cd renderer/frontend
+        npm run build 
+        cd ../..
         echo "Running docker-compose up -d --build"
         # Start Docker Compose
         docker-compose up -d --build

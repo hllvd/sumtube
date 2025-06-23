@@ -349,7 +349,7 @@ func pushSummaryToDynamoDB(data HandleSummaryRequestResponse, summary string, pa
         "category":     &dynamodbtypes.AttributeValueMemberS{Value: data.Category},
         "video_lang":   &dynamodbtypes.AttributeValueMemberS{Value: data.VideoLang},
         "summary":      &dynamodbtypes.AttributeValueMemberS{Value: summary},
-		"article_update_datetime": &dynamodbtypes.AttributeValueMemberS{Value: time.Now().Format("2006-01-02 15:04:05")}, //sumtube publish timestamp
+		"article_update_datetime": &dynamodbtypes.AttributeValueMemberS{Value: time.Now().Format("2006-01-02T15:04:05")}, //sumtube publish timestamp
         "path":         &dynamodbtypes.AttributeValueMemberS{Value: path},
         "like_count":    &dynamodbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%d", data.LikeCount)},
     }
@@ -703,6 +703,7 @@ type HandleSummaryRequestResponse struct {
 	Status      string  `json:"status"`
 	UploaderID  string  `json:"uploader_id"`
 	UploadDate  string  `json:"video_upload_date"`
+	ArticleUploadDateTime string `json:"article_update_datetime"`
 	Duration    int `json:"duration"`
 	ChannelID   string  `json:"channel_id"`
 	Category    string  `json:"category"`
@@ -722,6 +723,7 @@ type DynamoDbResponseToJson struct {
     Status     string `dynamodbav:"status" json:"status"`
     UploaderID string `dynamodbav:"uploader_id" json:"uploaderId"`
     UploadDate string `dynamodbav:"video_upload_date" json:"uploadDate"`
+	ArticleUploadDateTime string `dynamodbav:"article_update_datetime" json:"articleUploadDateTime"`
     Duration   string `dynamodbav:"duration" json:"duration"` // or float64 if needed
 }
 
@@ -774,6 +776,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 
 		println("cachedData content", dynamoDbResponse.Content)
 		if dynamoDbResponse.Status == "processing" {
+			println("RESPONSE processing", dynamoDbResponse.Status)
 			response := GPTResponseToJson{
                 Title:   dynamoDbResponse.Title,
                 Vid:     videoID,
@@ -782,9 +785,10 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
                 Lang:    requestBody.Language,
                 Answer:  dynamoDbResponse.Answer,
                 Path:    dynamoDbResponse.Path,
-                Status:  dynamoDbResponse.Status, // Add status field
+                Status:  dynamoDbResponse.Status,
 				UploaderID: dynamoDbResponse.UploaderID,
 				UploadDate: dynamoDbResponse.UploadDate,
+				ArticleUploadDateTime: dynamoDbResponse.ArticleUploadDateTime,
 				Duration: dynamoDbResponse.Duration,
             }
 			w.Header().Set("Content-Type", "application/json")
@@ -806,7 +810,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 				log.Printf("Error parsing summary field on db to json: %v", errJson)
 				return
 			}
-
+			println("RESPONSE err==null cachedData != nil", dynamoDbResponse.ArticleUploadDateTime)
             response := GPTResponseToJson{
                 Title:   dynamoDbResponse.Title,
                 Vid:     videoID,
@@ -818,8 +822,11 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
                 Status:  dynamoDbResponse.Status,
 				UploaderID: dynamoDbResponse.UploaderID,
 				UploadDate: dynamoDbResponse.UploadDate,
+				ArticleUploadDateTime: dynamoDbResponse.ArticleUploadDateTime,
 				Duration: dynamoDbResponse.Duration,
             }
+
+			
 
             w.Header().Set("Content-Type", "application/json")
             json.NewEncoder(w).Encode(response)
@@ -984,6 +991,7 @@ func handleCategorySummaryRequest(w http.ResponseWriter, r *http.Request) {
 		}
 		results = append(results, response)
 	}
+	
 
 	// Respond with JSON
 	w.Header().Set("Content-Type", "application/json")
@@ -1004,6 +1012,7 @@ type GPTResponseToJson struct {
     Status  string `json:"status"` // Mandatory field
 	UploaderID string `json:"uploader_id,omitempty"`
 	UploadDate string `json:"video_upload_date,omitempty"`
+	ArticleUploadDateTime string `json:"article_update_datetime,omitempty"`
 	Duration string `json:"duration,omitempty"`
 }
 // Handle Google OAuth2 redirect

@@ -11,6 +11,9 @@ function YTSummarizerComponent() {
     title: string
     duration: string
   }>(null)
+  const [videoError, setVideoError] = useState<null | {
+    errorMessage: string
+  }>(null)
 
   // Use useEffect to handle automatic submission
   useEffect(() => {
@@ -24,7 +27,7 @@ function YTSummarizerComponent() {
 
       // Trigger automatic submission
       const language = root?.dataset.lang || "en"
-      const apiUrl = root?.dataset.apiUrl || "http://api.sumtube.io"
+      const apiUrl = root?.dataset.apiurl || "http://api.sumtube.io"
       setIsLoading(true)
       setVideoInfo(null)
       fetchSummary(apiUrl, videoId, language)
@@ -54,17 +57,43 @@ function YTSummarizerComponent() {
 
       const data = await response.json()
 
-      if (data.status === "processing") {
-        setVideoInfo({
-          videoId: data.videoId,
-          uploader_id: data.uploader_id,
-          title: data.title,
-          duration: data.duration,
-        })
-        setTimeout(() => fetchSummary(apiUrl, videoId, language), 3000)
-      } else if (data.status === "completed") {
-        window.location.href = `${window.location.origin}/${data.lang}/${data.videoId}/${data.path}`
+      switch (data.status) {
+        case "processing":
+          setVideoInfo({
+            videoId: data.videoId,
+            uploader_id: data.uploader_id,
+            title: data.title,
+            duration: data.duration,
+          })
+          setTimeout(() => fetchSummary(apiUrl, videoId, language), 3000)
+          break
+        case "completed":
+          window.location.href = `${window.location.origin}/${data.lang}/${data.videoId}/${data.path}`
+          break
+        case "caps_not_found":
+          setVideoError({
+            errorMessage:
+              "⚠️ We couldn't download the captions for this video. We're working to support this type of video soon.",
+          })
+          setTimeout(() => {
+            setIsLoading(false)
+          }, 5000)
+          break
+        default:
+          console.error("Unexpected status:", data.status)
+          setIsLoading(false)
       }
+      // if (data.status === "processing") {
+      //   setVideoInfo({
+      //     videoId: data.videoId,
+      //     uploader_id: data.uploader_id,
+      //     title: data.title,
+      //     duration: data.duration,
+      //   })
+      //   setTimeout(() => fetchSummary(apiUrl, videoId, language), 3000)
+      // } else if (data.status === "completed") {
+      //   window.location.href = `${window.location.origin}/${data.lang}/${data.videoId}/${data.path}`
+      // }
     } catch (error) {
       console.error("Error fetching summary:", error)
       setIsLoading(false)
@@ -80,7 +109,7 @@ function YTSummarizerComponent() {
     setVideoInfo(null)
     const root = document.getElementById("react-root")
     const language = root?.dataset.lang || "en"
-    const apiUrl = root?.dataset.apiUrl || "http://api.sumtube.io"
+    const apiUrl = root?.dataset.apiurl || "http://api.sumtube.io"
     fetchSummary(apiUrl, videoId, language)
   }
 
@@ -152,7 +181,9 @@ function YTSummarizerComponent() {
 
       {isLoading && (
         <div className="w-full text-center max-w-xl mx-auto bg-white p-6 rounded-lg shadow-md">
-          {videoInfo ? (
+          {videoError ? (
+            <>{videoError.errorMessage}</>
+          ) : videoInfo ? (
             <>
               <img
                 src={`https://i.ytimg.com/vi/${videoInfo.videoId}/hqdefault.jpg`}
