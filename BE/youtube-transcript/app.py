@@ -1,8 +1,17 @@
 from flask import Flask, request, jsonify, Response
 from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
 import datetime
+import os
+import requests
 
 app = Flask(__name__)
+
+# Proxy configuration
+proxy_server = os.getenv('PROXY_SERVER')
+proxies = {
+    'http': proxy_server,
+    'https': proxy_server
+} if proxy_server else None
 
 def convert_to_srt(transcript):
     srt = ""
@@ -23,6 +32,10 @@ def transcript():
         return jsonify({'error': 'Missing vid or lang parameter'}), 400
 
     try:
+        # Configure YouTubeTranscriptApi to use the proxy
+        if proxy_server:
+            YouTubeTranscriptApi.http_client.proxies = proxies
+            
         transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=[lang])
     except TranscriptsDisabled:
         return jsonify({'error': 'Transcripts are disabled for this video'}), 403
