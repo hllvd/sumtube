@@ -45,7 +45,7 @@ services:
     env_file:
       - ./youtube-transcript/.env
     environment:
-      - FLASK_ENV=development
+      - FLASK_ENV=production
 
   nginx:
     image: nginx:latest

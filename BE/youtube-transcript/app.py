@@ -16,7 +16,6 @@ if proxy_url:
     ytt_api = YouTubeTranscriptApi(
         proxy_config=GenericProxyConfig(
             http_url=proxy_url,
-            https_url=proxy_url,
         )
     )
 else:
