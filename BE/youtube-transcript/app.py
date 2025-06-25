@@ -6,21 +6,22 @@ import os
 
 app = Flask(__name__)
 
-# Proxy configuration via env var
 proxy_url = os.getenv('PROXY_SERVER')
-print(f"[DEBUG] PROXY_SERVER={proxy_url}")
 
-# Configure YouTubeTranscriptApi instance
-if proxy_url:
-    print(f"[Proxy Enabled] Using proxy: {proxy_url}")
-    ytt_api = YouTubeTranscriptApi(
-        proxy_config=GenericProxyConfig(
-            http_url=proxy_url,
+def create_ytt_instance():
+    if proxy_url:
+        print(f"[Proxy Enabled] Using proxy: {proxy_url}")
+        return YouTubeTranscriptApi(
+            proxy_config=GenericProxyConfig(
+                http_url=proxy_url,
+                # https_url=proxy_url,
+            )
         )
-    )
-else:
-    print("[Proxy Disabled] No proxy configured")
-    ytt_api = YouTubeTranscriptApi()
+    else:
+        print("[Proxy Disabled] No proxy configured")
+        return YouTubeTranscriptApi()
+
+ytt_api = create_ytt_instance()
 
 def convert_to_srt(transcript):
     srt = ""
@@ -47,6 +48,7 @@ def transcript():
     except NoTranscriptFound:
         return jsonify({'error': 'Transcript not found for the given language'}), 404
     except Exception as e:
+        print(f"[ERROR] Exception during transcript fetch: {e}")
         return jsonify({'error': str(e)}), 500
 
     if fmt == 'srt':
