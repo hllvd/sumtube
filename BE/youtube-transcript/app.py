@@ -1,17 +1,27 @@
 from flask import Flask, request, jsonify, Response
 from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
+from youtube_transcript_api.proxies import GenericProxyConfig
 import datetime
 import os
-import requests
 
 app = Flask(__name__)
 
-# Proxy configuration
-proxy_server = os.getenv('PROXY_SERVER')
-proxies = {
-    'http': proxy_server,
-    'https': proxy_server
-} if proxy_server else None
+# Proxy configuration via env var
+proxy_url = os.getenv('PROXY_SERVER')
+print(f"[DEBUG] PROXY_SERVER={proxy_url}")
+
+# Configure YouTubeTranscriptApi instance
+if proxy_url:
+    print(f"[Proxy Enabled] Using proxy: {proxy_url}")
+    ytt_api = YouTubeTranscriptApi(
+        proxy_config=GenericProxyConfig(
+            http_url=proxy_url,
+            https_url=proxy_url,
+        )
+    )
+else:
+    print("[Proxy Disabled] No proxy configured")
+    ytt_api = YouTubeTranscriptApi()
 
 def convert_to_srt(transcript):
     srt = ""
@@ -32,11 +42,7 @@ def transcript():
         return jsonify({'error': 'Missing vid or lang parameter'}), 400
 
     try:
-        # Configure YouTubeTranscriptApi to use the proxy
-        if proxy_server:
-            YouTubeTranscriptApi.http_client.proxies = proxies
-            
-        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=[lang])
+        transcript = ytt_api.get_transcript(video_id, languages=[lang])
     except TranscriptsDisabled:
         return jsonify({'error': 'Transcripts are disabled for this video'}), 403
     except NoTranscriptFound:
@@ -51,4 +57,4 @@ def transcript():
         return jsonify(transcript)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5050, debug=False)
+    app.run(host='0.0.0.0', port=5050, debug=True)

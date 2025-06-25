@@ -42,8 +42,10 @@ services:
       - "5050:5050"
     networks:
       - app-network
+    env_file:
+      - ./youtube-transcript/.env
     environment:
-      - FLASK_ENV=production
+      - FLASK_ENV=development
 
   nginx:
     image: nginx:latest
