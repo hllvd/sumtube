@@ -3,7 +3,7 @@ server {
     ${SERVER_NAME_BLOCK}
 
     location /transcript/ {
-        proxy_pass http://${TRANSCRIPT_SERVER_HOST}:${TRANSCRIPT_SERVER_PORT};
+        proxy_pass http://${TRANSCRIPT_PY_SERVER_HOST}:${TRANSCRIPT_PY_SERVER_PORT};
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

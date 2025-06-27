@@ -197,7 +197,7 @@ func downloadSubtitle(videoURL string, lang string) (string, error) {
 // tryDownloadSubtitle requests subtitles from the internal transcript server and saves them to disk.
 
 func tryDownloadSubtitle(videoURL, videoID, outputTemplate, lang string) (string, error) {
-	baseURL := "http://youtube-transcript-server:5050/transcript"
+	baseURL := "http://youtube-transcript-py-server:5050/transcript"
 	query := url.Values{}
 	query.Set("vid", videoID)
 	query.Set("lang", lang)

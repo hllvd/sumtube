@@ -35,15 +35,15 @@ services:
     environment:
       - PATH=/usr/local/bin:${PATH}
 
-  youtube-transcript-server:
-    build: ./youtube-transcript
-    container_name: youtube-transcript-server
+  youtube-transcript-py-server:
+    build: ./youtube-transcript-py
+    container_name: youtube-transcript-py-server
     ports:
       - "5050:5050"
     networks:
       - app-network
     env_file:
-      - ./youtube-transcript/.env
+      - ./youtube-transcript-py/.env
     environment:
       - FLASK_ENV=production
 
@@ -57,7 +57,7 @@ services:
     volumes:
       - ./api/nginx/api.conf.template:/etc/nginx/conf.d/api.conf.template
       - ./renderer/nginx/renderer.conf.template:/etc/nginx/conf.d/renderer.conf.template
-      - ./youtube-transcript/nginx/transcript.conf.template:/etc/nginx/conf.d/transcript.conf.template
+      - ./youtube-transcript-py/nginx/transcript-py.conf.template:/etc/nginx/conf.d/transcript-py.conf.template
       - ./youtube-metadata/nginx/youtube-metadata.conf.template:/etc/nginx/conf.d/youtube-metadata.conf.template
       - ./nginx/docker-entrypoint.sh:/docker-entrypoint.sh
       - ./renderer/static:/app/static
@@ -66,7 +66,7 @@ services:
     depends_on:
       - go-server
       - renderer-server
-      - youtube-transcript-server
+      - youtube-transcript-py-server
     networks:
       - app-network
 
