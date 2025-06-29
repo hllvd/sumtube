@@ -776,7 +776,7 @@ func loadContentWhenItsCached(videoID string, lang string) (*GPTResponseToJson, 
 
 	// Check if it's processing in DynamoDb
 	if dynamoDbResponse.Status == "processing" {
-		log.Println("⌛ Content is still processing...")
+		log.Println("⌛Content is still processing...")
 		return &GPTResponseToJson{
 			Title:                 dynamoDbResponse.Title,
 			Vid:                   videoID,
