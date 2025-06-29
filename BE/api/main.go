@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -42,6 +43,9 @@ var system2PromptTxt string
 
 //go:embed prompts/user1.prompt.txt
 var user1PromptTxt string
+
+var processingVideos = make(map[string]bool)
+var processingMu sync.Mutex
 
 // OAuth2 configuration for Google
 var googleOAuthConfig = &oauth2.Config{
@@ -164,6 +168,29 @@ func convertTitleToURL(title string) string {
 		}
 	}
 	return result.String()
+}
+
+func downloadSubtitleByDownSub(metadataResponse* VideoMetadata) (string, error) {
+	capUrl := metadataResponse.Captions[0].BaseURL
+
+	
+	resp, err := http.Get(capUrl)
+	if err != nil {
+		return "", fmt.Errorf("failed to download subtitle: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("subtitle server returned status %d", resp.StatusCode)
+	}
+
+	content, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read subtitle data: %w", err)
+	}
+
+    return string(content), nil
+
 }
 
 func downloadSubtitle(videoURL string, lang string) (string, error) {
@@ -328,7 +355,7 @@ func pushSummaryToDynamoDB(data HandleSummaryRequestResponse, summary string, pa
 	dateTimeNow := time.Now().Format("2006-01-02 15:04")
 
     item := map[string]dynamodbtypes.AttributeValue{
-        "PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("LANG#%s#VIDEO#%s", data.Lang, data.Vid)},
+        "PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("LANG#%s#VIDEO#%s", data.Lang, data.VideoID)},
         "SK": &dynamodbtypes.AttributeValueMemberS{Value: "METADATA"},
 
         // GSI for querying by category and LikeCount
@@ -338,7 +365,7 @@ func pushSummaryToDynamoDB(data HandleSummaryRequestResponse, summary string, pa
         },
 
         // Main data fields
-        "vid":          &dynamodbtypes.AttributeValueMemberS{Value: data.Vid},
+        "vid":          &dynamodbtypes.AttributeValueMemberS{Value: data.VideoID},
         "title":        &dynamodbtypes.AttributeValueMemberS{Value: data.Title},
         "lang":         &dynamodbtypes.AttributeValueMemberS{Value: data.Lang},
         "status":       &dynamodbtypes.AttributeValueMemberS{Value: data.Status},
@@ -647,7 +674,7 @@ func getSummaryFromDynamoDB(vid string, lang string) (map[string]dynamodbtypes.A
     }
 
     if result.Item == nil {
-        return nil, fmt.Errorf("item not found")
+        return nil, nil
     }
 
     return result.Item, nil
@@ -697,7 +724,7 @@ func getLatestVideosByCategoryFromDynamoDB(lang string, category string, minLike
 
 
 type HandleSummaryRequestResponse struct {
-	Vid         string  `json:"vid"`
+	VideoID      string  `json:"videoId"`
 	Title       string  `json:"title"`
 	Lang        string  `json:"lang"`
 	Status      string  `json:"status"`
@@ -727,6 +754,75 @@ type DynamoDbResponseToJson struct {
     Duration   string `dynamodbav:"duration" json:"duration"` // or float64 if needed
 }
 
+func loadContentWhenItsCached(videoID string, lang string) (*GPTResponseToJson, error) {
+	type ContentData struct {
+		Content string `json:"content"`
+		Answer  string `json:"answer"`
+	}
+
+	cachedData, err := getSummaryFromDynamoDB(videoID, lang)
+	if err != nil {
+		log.Printf("❌ Error fetching from DynamoDB: %v", err)
+		return nil, err
+	}
+
+	var dynamoDbResponse DynamoDbResponseToJson
+	if err := attributevalue.UnmarshalMap(cachedData, &dynamoDbResponse); err != nil {
+		log.Printf("❌ Failed to unmarshal DynamoDB item: %v", err)
+		return nil, err
+	}
+
+	log.Printf("✅ Loaded DynamoDB content: status=%s, title=%s", dynamoDbResponse.Status, dynamoDbResponse.Title)
+
+	// Se ainda está processando
+	if dynamoDbResponse.Status == "processing" {
+		log.Println("⌛ Content is still processing...")
+		return &GPTResponseToJson{
+			Title:                 dynamoDbResponse.Title,
+			Vid:                   videoID,
+			Content:               dynamoDbResponse.Content,
+			Category:              dynamoDbResponse.Category,
+			Lang:                  lang,
+			Answer:                dynamoDbResponse.Answer,
+			Path:                  dynamoDbResponse.Path,
+			Status:                dynamoDbResponse.Status,
+			UploaderID:            dynamoDbResponse.UploaderID,
+			UploadDate:            dynamoDbResponse.UploadDate,
+			ArticleUploadDateTime: dynamoDbResponse.ArticleUploadDateTime,
+			Duration:              dynamoDbResponse.Duration,
+		}, nil
+	}
+
+	// Se já tem conteúdo válido
+	if cachedData != nil && dynamoDbResponse.Content != "" {
+		log.Printf("🧠 Parsing cached summary content")
+		parsedContent, err := parseJSONContent(dynamoDbResponse.Content)
+		if err != nil {
+			log.Printf("❌ Error parsing summary field: %v", err)
+			return nil, err
+		}
+
+		return &GPTResponseToJson{
+			Title:                 dynamoDbResponse.Title,
+			Vid:                   videoID,
+			Content:               parsedContent["content"],
+			Category:              dynamoDbResponse.Category,
+			Lang:                  dynamoDbResponse.Lang,
+			Answer:                parsedContent["answer"],
+			Path:                  dynamoDbResponse.Path,
+			Status:                dynamoDbResponse.Status,
+			UploaderID:            dynamoDbResponse.UploaderID,
+			UploadDate:            dynamoDbResponse.UploadDate,
+			ArticleUploadDateTime: dynamoDbResponse.ArticleUploadDateTime,
+			Duration:              dynamoDbResponse.Duration,
+		}, nil
+	}
+
+	log.Println("ℹ️ No valid cached data found.")
+	return nil, nil
+}
+
+
 func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
     if r.Method != http.MethodPost {
         http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
@@ -736,6 +832,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
     // Parse URL query parameters
     queryParams := r.URL.Query()
     force := queryParams.Get("force") == "true"
+	
 
     var requestBody struct {
         VideoID  string `json:"videoId"`
@@ -746,7 +843,9 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+	lang := requestBody.Language
     videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", requestBody.VideoID)
+ 
 
     videoID, err := extractVideoID(videoURL)
     if err != nil {
@@ -755,149 +854,156 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
     }
 
     // If force is false, try to get cached summary from DynamoDB
-    if !force {
-        type ContentData struct {
-            Content string `json:"content"`
-            Answer  string `json:"answer"`
-        }
-
-        cachedData, err := getSummaryFromDynamoDB(videoID, requestBody.Language)
-		var dynamoDbResponse DynamoDbResponseToJson
-		dynamoDbResponseErr := attributevalue.UnmarshalMap(cachedData, &dynamoDbResponse)
-		if dynamoDbResponseErr != nil {
-			log.Printf("Failed to unmarshal DynamoDB item: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+	if !force {
+		content, err := loadContentWhenItsCached(videoID, lang)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Error loading cached content: %v", err), http.StatusInternalServerError)
 			return
 		}
-	
-		if err != nil {
-			println("Error fetching from DynamoDB:", err.Error())
-		}
+		
+		
+		if content != nil {
+			// remove the video from processing array
+			defer func() {
+				processingMu.Lock()
+				delete(processingVideos, videoID)
+				processingMu.Unlock()
+			}()
 
-		println("cachedData content", dynamoDbResponse.Content)
-		if dynamoDbResponse.Status == "processing" {
-			println("RESPONSE processing", dynamoDbResponse.Status)
-			response := GPTResponseToJson{
-                Title:   dynamoDbResponse.Title,
-                Vid:     videoID,
-                Content: dynamoDbResponse.Content,
-				Category: dynamoDbResponse.Category,
-                Lang:    requestBody.Language,
-                Answer:  dynamoDbResponse.Answer,
-                Path:    dynamoDbResponse.Path,
-                Status:  dynamoDbResponse.Status,
-				UploaderID: dynamoDbResponse.UploaderID,
-				UploadDate: dynamoDbResponse.UploadDate,
-				ArticleUploadDateTime: dynamoDbResponse.ArticleUploadDateTime,
-				Duration: dynamoDbResponse.Duration,
-            }
 			w.Header().Set("Content-Type", "application/json")
-            json.NewEncoder(w).Encode(response)
-            return
+			json.NewEncoder(w).Encode(content)
+			return
 		}
-		if cachedData != nil {
-			println("CACHED DATA - Title:", cachedData["title"])
-			println("CACHED DATA - Content:", cachedData["content"])
-			println("CACHED DATA - Path:", cachedData["path"])
+		// If content is nil, fallback to fetch
+		log.Printf("📭 No cached content found for videoID=%s, proceeding to fetch.", videoID)
+		initialResponse := HandleSummaryRequestResponse{
+			VideoID:         videoID,
+			Title:       "",
+			Lang:        lang,
+			Status:      "processing",
+			UploaderID:  "",
+			UploadDate:  "",
+			ArticleUploadDateTime: "",
+			Duration:    0,
+			ChannelID:   "",
+			Category:    "",
+			VideoLang:   "",
+			LikeCount:   0,
 		}
-        if err == nil && cachedData != nil {
-			println("CACHED DATA", cachedData)
-            // Parse the JSON content from DynamoDB
-			log.Printf("Parsing JSON from DynamoDB content: [%s]", dynamoDbResponse.Content)
-			jsonGeneratedByContent, errJson := parseJSONContent(dynamoDbResponse.Content)
 
-			if dynamoDbResponse.Content != "" && errJson != nil {
-				log.Printf("Error parsing summary field on db to json: %v", errJson)
-				return
-			}
-			println("RESPONSE err==null cachedData != nil", dynamoDbResponse.ArticleUploadDateTime)
-            response := GPTResponseToJson{
-                Title:   dynamoDbResponse.Title,
-                Vid:     videoID,
-                Content: jsonGeneratedByContent["content"],
-				Category: dynamoDbResponse.Category,
-                Lang:    dynamoDbResponse.Lang,
-                Answer:  jsonGeneratedByContent["answer"],
-                Path:    dynamoDbResponse.Path,
-                Status:  dynamoDbResponse.Status,
-				UploaderID: dynamoDbResponse.UploaderID,
-				UploadDate: dynamoDbResponse.UploadDate,
-				ArticleUploadDateTime: dynamoDbResponse.ArticleUploadDateTime,
-				Duration: dynamoDbResponse.Duration,
-            }
+		// 🔒 Check if already processing
+		processingMu.Lock()
+		if processingVideos[videoID] {
+			processingMu.Unlock()
+			log.Printf("⚠️ Already processing videoID=%s, returning early response", videoID)
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(initialResponse)
+			return
+		}else{
 
+			// Start async processing
+			go func() {
+				log.Println("⏳ => Start async processing ", videoID)
+				metadataDynamoResponse, fetchMetadataResponse, err := runMetadataAndCapsFetcherAsync(videoURL, lang)
+				if err != nil {
+					http.Error(w, fmt.Sprintf("Error fetching metadata and caps: %v", err), http.StatusInternalServerError)
+					return
+				}
+				runDownloadAndSummarizeCapsAsync(videoURL, metadataDynamoResponse, fetchMetadataResponse)
+			}()
 			
+			processingVideos[videoID] = true  // 👈 Here you mark the video as "in processing"
+		}
+		
+		processingMu.Unlock()
+		
+		// err = pushSummaryToDynamoDB(
+		// 	initialResponse,
+		// 	"",
+		// 	"",
+		// );
+		// if (err != nil) {
+		// 	http.Error(w, fmt.Sprintf("Error pushing to DynamoDB [0]: %v", err), http.StatusInternalServerError)
+		// 	return
+		// }
+		
 
-            w.Header().Set("Content-Type", "application/json")
-            json.NewEncoder(w).Encode(response)
-            return
-        }
-    }
-	println("NO CACHED DATA", force)
-    // Get basic metadata first (synchronous)
-    metadata, err := getVideoMetadata(videoURL)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(initialResponse)
+		return
+	}
+	
+
+    
+}
+
+func runMetadataAndCapsFetcherAsync(videoURL string, lang string) (*HandleSummaryRequestResponse, *VideoMetadata, error) {
+	videoID, err := extractVideoID(videoURL)
 	if err != nil {
-		log.Fatalf("Error fetching metadata: %v", err)
+		return nil, nil, fmt.Errorf("failed to extract video ID: %v", err)
 	}
 
-	var status string = "processing"
-	var captionLang string
+	// Get basic metadata
+	metadata, err := getVideoMetadata(videoURL)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error fetching metadata: %v", err)
+	}
+
+	status := "processing"
+	captionLang := ""
 	if len(metadata.Captions) > 0 {
 		captionLang = metadata.Captions[0].Lang
 	} else {
 		status = "caps_not_found"
-		//http.Error(w, "No subtitles found", http.StatusNotFound)
-		//return
 	}
 
-	// Access each property:
-	title := metadata.Title
-	videoLanguage := captionLang
-	uploaderID := metadata.ChannelID
-	uploadDate := metadata.PublishDate
-	duration := metadata.LengthSeconds
-	channelID := metadata.ChannelID
-	category := metadata.Category
-	
-	likeCounter := metadata.ViewCount
+	durationInt, err := strconv.Atoi(metadata.LengthSeconds)
+	if err != nil {
+		log.Printf("⚠️ Failed to convert duration to int: %v", err)
+		durationInt = 0
+	}
 
-	durationInt, _ := strconv.Atoi(duration)
-	likeCountInt, _ := strconv.Atoi(likeCounter)
+	likeCountInt, err := strconv.Atoi(metadata.ViewCount)
+	if err != nil {
+		log.Printf("⚠️ Failed to convert like count to int: %v", err)
+		likeCountInt = 0
+	}
 
-    // Immediate response with processing status including all metadata
-    initialResponse := HandleSummaryRequestResponse{
-        Vid:         videoID,
-        Title:       title,
-        Lang:        requestBody.Language,
-        Status:      status,
-        UploaderID:  uploaderID,
-        UploadDate:  uploadDate,
-        Duration:    durationInt,
-        ChannelID:   channelID,
-        Category:    category,
-        VideoLang:   videoLanguage,
+	// Build response object
+	metadataResponse := &HandleSummaryRequestResponse{
+		VideoID:     videoID,
+		Title:       metadata.Title,
+		Lang:        lang,
+		Status:      status,
+		UploaderID:  metadata.ChannelID,
+		UploadDate:  metadata.PublishDate,
+		Duration:    durationInt,
+		ChannelID:   metadata.ChannelID,
+		Category:    metadata.Category,
+		VideoLang:   captionLang,
 		LikeCount:   likeCountInt,
-    }
-	path := convertTitleToURL(title)
-	if err := pushSummaryToDynamoDB(
-		initialResponse,
-		"",  
-		path,
-	); err != nil {
-		http.Error(w, fmt.Sprintf("Error pushing to DynamoDB [1]: %v", err), http.StatusInternalServerError)
-		return
 	}
 
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(initialResponse)
+	path := convertTitleToURL(metadata.Title)
+	if err := pushSummaryToDynamoDB(*metadataResponse, "", path); err != nil {
+		log.Printf("❌ Failed to push metadata to DynamoDB: %v", err)
+		return nil, nil, err
+	}
 
-    // Start async processing
-    go func() {
-        subtitleKey := videoID + "-caption.txt"
+	return metadataResponse, metadata, nil
+}
+
+
+func runDownloadAndSummarizeCapsAsync(videoURL string, metadataDynamoResponse* HandleSummaryRequestResponse, metadataResponse* VideoMetadata) {
+	lang := metadataDynamoResponse.VideoLang
+	title := metadataDynamoResponse.Title
+	videoID, _ := extractVideoID(videoURL)
+	subtitleKey := videoID + "-caption.txt"
         subtitleSanitized, _ := fetchS3(subtitleKey)
 
         if subtitleSanitized == "" {
-            subtitle, err := downloadSubtitle(videoURL, videoLanguage)
+            //subtitle, err := downloadSubtitle(videoURL, lang)
+			subtitle, err := downloadSubtitleByDownSub(metadataResponse)
             if err != nil {
                 log.Printf("Error downloading subtitle: %v\n", err)
                 return
@@ -912,7 +1018,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
             }
         }
 
-        summary, err := summarizeText(subtitleSanitized, requestBody.Language, title)
+        summary, err := summarizeText(subtitleSanitized, lang, title)
 		fmt.Println("summary",summary)
         if err != nil {
             log.Printf("Error summarizing caption: %v\n", err)
@@ -926,24 +1032,16 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         }
 
         path := convertTitleToURL(title)
-		processedResponse := initialResponse
-		processedResponse.Status = "completed"
+		
+		metadataDynamoResponse.Status = "completed"
         if err := pushSummaryToDynamoDB(
-			processedResponse,
+			*metadataDynamoResponse,
 			sanitizedSummary,
 			path,
 		); err != nil {
-			http.Error(w, fmt.Sprintf("Error pushing to DynamoDB [2]: %v", err), http.StatusInternalServerError)
+			log.Println("Error pushing to DynamoDB [2]: %v", err)
 			return
 		}
-
-		// category := initialResponse.Category
-		// likeCounter := initialResponse.LikeCount
-		
-		// // if err := pushCategoryStatsToDynamoDB(category, likeCounter, videoID, summary); err != nil {
-		// // 	log.Printf("Failed to push category stats to DynamoDB: %v", err)
-		// // }
-    }()
 }
 
 func handleCategorySummaryRequest(w http.ResponseWriter, r *http.Request) {

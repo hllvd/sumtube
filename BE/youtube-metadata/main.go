@@ -45,19 +45,19 @@ func metadataHandler(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	switch method {
-	case "downsub":
-		// info, err = FetchUsingDownsub(vid) // futura função
-		downSubReturn, err := FetchMetadataFromDownsub(vid)
-		if (err != nil) {
-			http.Error(w, fmt.Sprintf("Error fetching metadata: %v", err), http.StatusInternalServerError)
-			return
-		}
-		
-		info = convertDownSubResponseToFlatResponse(downSubReturn)
-		fmt.Printf("📤 Final response: %+v\n", info)
-		//http.Error(w, "downsub not implemented", http.StatusNotImplemented)
-	default:
-		info, err = FetchDirectly(vid)
+		case "downsub":
+			// info, err = FetchUsingDownsub(vid) // futura função
+			downSubReturn, err := FetchMetadataFromDownsub(vid)
+			if (err != nil) {
+				http.Error(w, fmt.Sprintf("Error fetching metadata: %v", err), http.StatusInternalServerError)
+				return
+			}
+			
+			info = convertDownSubResponseToFlatResponse(downSubReturn)
+			fmt.Printf("📤 Final response: %+v\n", info)
+			//http.Error(w, "downsub not implemented", http.StatusNotImplemented)
+		default:
+			info, err = FetchDirectly(vid)
 	}
 
 	if err != nil {
