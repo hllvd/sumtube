@@ -104,8 +104,7 @@ func FetchMetadataFromDownsub(videoID string) (*DownsubResponse, error) {
 
 
 
-func convertDownSubInfoToFlatInfo(downsubInfo *DownsubResponse) *YoutubeMetadataResponse {
-	// Mapeamento de nomes para códigos
+func convertDownSubResponseToFlatResponse(downsubInfo *DownsubResponse) *YoutubeMetadataResponse {
 	langMap := map[string]string{
 		"portuguese": "pt",
 		"english":    "en",
@@ -116,23 +115,14 @@ func convertDownSubInfoToFlatInfo(downsubInfo *DownsubResponse) *YoutubeMetadata
 
 	captions := make([]Caption, 0)
 
-	fmt.Printf("🎬 Converting Downsub Info: Title=%q, Duration=%ds\n", downsubInfo.Data.Title, downsubInfo.Data.Duration)
-	fmt.Printf("🈸 Found %d subtitle entries\n", len(downsubInfo.Data.Subtitles))
-
 	for _, subtitle := range downsubInfo.Data.Subtitles {
 		langName := strings.ToLower(strings.Split(subtitle.Language, " ")[0])
 		langCode, ok := langMap[langName]
 		if !ok {
-			fmt.Printf("🚫 Skipping unsupported language: %s\n", subtitle.Language)
 			continue
 		}
-
-		fmt.Printf("🌐 Processing subtitle language: %s → %s\n", subtitle.Language, langCode)
-
 		for _, format := range subtitle.Formats {
 			if format.Format == "srt" {
-				fmt.Printf("   └─ Format: %s\n", format.Format)
-				fmt.Printf("      ✅ Added SRT subtitle: %s\n", format.Url)
 				captions = append(captions, Caption{
 					BaseUrl:      format.Url,
 					LanguageCode: langCode,
@@ -142,9 +132,7 @@ func convertDownSubInfoToFlatInfo(downsubInfo *DownsubResponse) *YoutubeMetadata
 		}
 	}
 
-	fmt.Printf("📦 Total captions added: %d\n", len(captions))
-
-	result := &YoutubeMetadataResponse{
+	return &YoutubeMetadataResponse{
 		Title:             downsubInfo.Data.Title,
 		LengthSeconds:     fmt.Sprintf("%d", downsubInfo.Data.Duration),
 		OwnerChannelName:  downsubInfo.Data.Metadata.Author,
@@ -155,10 +143,8 @@ func convertDownSubInfoToFlatInfo(downsubInfo *DownsubResponse) *YoutubeMetadata
 		ViewCount:         downsubInfo.Data.Metadata.ViewCount,
 		Captions:          captions,
 	}
-
-	fmt.Printf("📤 Final YoutubeMetadataResponse: %+v\n", result)
-	return result
 }
+
 
 
 

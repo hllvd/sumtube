@@ -53,7 +53,7 @@ func metadataHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		
-		info = convertDownSubInfoToFlatInfo(downSubReturn)
+		info = convertDownSubResponseToFlatResponse(downSubReturn)
 		fmt.Printf("📤 Final response: %+v\n", info)
 		//http.Error(w, "downsub not implemented", http.StatusNotImplemented)
 	default:
