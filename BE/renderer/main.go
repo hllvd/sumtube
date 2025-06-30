@@ -52,6 +52,7 @@ func extractLang(path string) (string, bool) {
 }
 
 func langHandle(w http.ResponseWriter, r *http.Request) string {
+    println("langHandle path", r.URL.Path)
 	// 1. Highest priority: Check URL path (domain.com/{lang})
 	lang, isOnPath := extractLang(r.URL.Path)
 	if isOnPath {
@@ -66,25 +67,33 @@ func langHandle(w http.ResponseWriter, r *http.Request) string {
             SameSite: http.SameSiteStrictMode,
         }
         http.SetCookie(w, cookie)
+        println("langHandle isOnPath", lang)
 		return lang
 	}
 
 
 	// 2. Check language cookie
 	if cookie, err := r.Cookie("language"); err == nil {
+        println("langHandle 2", lang)
 		if allowedLanguages[cookie.Value] {
+            println("langHandle 2 isAllowed", cookie.Value)
 			return cookie.Value
 		}
 	}
 
 	// 3. Check browser Accept-Language header
-	acceptLang := r.Header.Get("Accept-Language")
+	acceptLang := getBrowserLang(r)
+
+    println("getBrowserLang acceptLang", acceptLang)
 	if acceptLang != "" {
+        println("Browser 1", acceptLang)
 		// Parse the first language in the header (e.g., "en-US,en;q=0.9" -> "en")
 		if lang := strings.Split(acceptLang, ",")[0]; lang != "" {
 			// Extract base language code (en-US -> en)
+            println("Browser 2", acceptLang)
 			baseLang := strings.Split(lang, "-")[0]
 			if allowedLanguages[baseLang] {
+                println("Browser 3", baseLang)
 				return baseLang
 			}
 		}
@@ -92,6 +101,24 @@ func langHandle(w http.ResponseWriter, r *http.Request) string {
 
 	// 4. Default to English
 	return "en"
+}
+
+func getBrowserLang(r *http.Request) string {
+    langHeader := r.Header.Get("Accept-Language")
+    if langHeader == "" {
+        return "en" // default fallback
+    }
+
+    // Example header: "en-US,en;q=0.9,fr;q=0.8"
+    parts := strings.Split(langHeader, ",")
+    if len(parts) == 0 {
+        return "en"
+    }
+
+    lang := strings.TrimSpace(parts[0]) // take the first one like "en-US"
+    langCode := strings.Split(lang, "-")[0] // extract "en" from "en-US"
+
+    return langCode
 }
 
 func extractVideoId(segments []string) string {
@@ -178,11 +205,11 @@ func GetVideosFromCategory(lang string, categoryName string, limit int) ([]map[s
         return nil, fmt.Errorf("SUMTUBE_VIDEOS_RELATED_API is not set")
     }
 
-    // Escapa a categoria para URL
+  
     escapedCategory := url.QueryEscape(categoryName)
     fullURL := fmt.Sprintf("%s?category=%s&lang=%s&limit=%d", baseURL, escapedCategory, lang, limit)
 
-    // Faz a requisição
+
     resp, err := http.Get(fullURL)
     if err != nil {
         return nil, fmt.Errorf("failed to call API: %v", err)
@@ -444,6 +471,7 @@ func GetRouteType(segments []string) RouteType {
 // Router function to delegate requests to the appropriate controller
 func router(w http.ResponseWriter, r *http.Request) {
     pathWithParam := strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "https://"), "http://")
+    println("pathWithParam",pathWithParam)
     if r.URL.RawQuery != "" {
         pathWithParam += "?" + r.URL.RawQuery
     }
