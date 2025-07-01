@@ -904,12 +904,28 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 			// Start async processing
 			go func() {
 				log.Println("⏳ => Start async processing ", videoID)
-				metadataDynamoResponse, fetchMetadataResponse, err := runMetadataAndCapsFetcherAsync(videoURL, lang)
+			
+				var metadataDynamoResponse *HandleSummaryRequestResponse
+				var fetchMetadataResponse *VideoMetadata
+			
+				err := withTimeoutRetry(10*time.Second, func() error {
+					var err error
+					metadataDynamoResponse, fetchMetadataResponse, err = runMetadataAndCapsFetcherAsync(videoURL, lang)
+					return err
+				})
 				if err != nil {
-					http.Error(w, fmt.Sprintf("Error fetching metadata and caps: %v", err), http.StatusInternalServerError)
+					log.Printf("❌ Failed to run metadata fetch after retry: %v", err)
 					return
 				}
-				runDownloadAndSummarizeCapsAsync(videoURL, metadataDynamoResponse, fetchMetadataResponse)
+			
+				err = withTimeoutRetry(10*time.Second, func() error {
+					runDownloadAndSummarizeCapsAsync(videoURL, metadataDynamoResponse, fetchMetadataResponse)
+					return nil
+				})
+				if err != nil {
+					log.Printf("❌ Failed to run download and summarize after retry: %v", err)
+					return
+				}
 			}()
 			
 			processingVideos[videoID] = true  // 👈 Here you mark the video as "in processing"
@@ -935,6 +951,30 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 	
 
     
+}
+
+func withTimeoutRetry(timeout time.Duration, fn func() error) error {
+	// First attempt
+	err := runWithTimeout(timeout, fn)
+	if err == nil {
+		return nil
+	}
+	log.Println("⚠️ First attempt failed or timed out. Retrying...")
+	// Retry once
+	return runWithTimeout(timeout, fn)
+}
+
+func runWithTimeout(timeout time.Duration, fn func() error) error {
+	ch := make(chan error, 1)
+	go func() {
+		ch <- fn()
+	}()
+	select {
+	case err := <-ch:
+		return err
+	case <-time.After(timeout):
+		return fmt.Errorf("function timed out after %s", timeout)
+	}
 }
 
 func runMetadataAndCapsFetcherAsync(videoURL string, lang string) (*HandleSummaryRequestResponse, *VideoMetadata, error) {
