@@ -9,6 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.19.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/dynamodbstreams v1.25.3 // indirect
 	github.com/rs/cors v1.11.1 // indirect
+	github.com/stretchr/testify v1.10.0 // indirect
 )
 
 require (

@@ -1,6 +1,7 @@
 package videostate
 
 import (
+	"reflect"
 	"sync"
 	"time"
 )
@@ -10,14 +11,18 @@ type Metadata struct {
 	Vid                   string `json:"videoId"`
 	Content               string `json:"content,omitempty"`
 	Lang                  string `json:"lang"`
+	VideoLang         	  string `json:"video_language,omitempty"`
 	Category              string `json:"category,omitempty"`
 	Answer                string `json:"answer,omitempty"`
 	Path                  string `json:"path,omitempty"`
 	Status                string `json:"status"` // Mandatory field
 	UploaderID            string `json:"uploader_id,omitempty"`
 	UploadDate            string `json:"video_upload_date,omitempty"`
+	ChannelID			  string `json:"channel_id,omitempty"`
 	ArticleUploadDateTime string `json:"article_update_datetime,omitempty"`
-	Duration              string `json:"duration,omitempty"`
+	Duration              int `json:"duration,omitempty"`
+	LikeCount			  int `json:"like_count,omitempty"`
+	VideoDownload		  string `json:"video_download,omitempty"`
 }
 
 type VideoStatus string
@@ -38,11 +43,11 @@ const (
 	StatusProcessingDownload   VideoStatus = "processing-download"
 	StatusDownloadProcessed    VideoStatus = "download-processed"
 	StatusProcessingSummarize  VideoStatus = "processing-summarize"
-	StatusSummarizeProcessed   VideoStatus = "summarize-processed"
+	StatusSummarizeProcessed   VideoStatus = "completed"
 )
 
 type Processor struct {
-	mu     sync.Mutex
+	mu     	sync.Mutex
 	videos []ProcessingVideo
 }
 
@@ -66,24 +71,114 @@ func (p *Processor) Exists(videoID string, language string) bool {
 	return false
 }
 
+func mergeNonZero(dst, src interface{}) {
+    dstVal := reflect.ValueOf(dst)
+    srcVal := reflect.ValueOf(src)
 
-func (p *Processor) Add(processingVideo ProcessingVideo) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+    if dstVal.Kind() == reflect.Ptr {
+        dstVal = dstVal.Elem()
+    }
+    if srcVal.Kind() == reflect.Ptr {
+        srcVal = srcVal.Elem()
+    }
 
-	timeNow := time.Now().UTC()
+    for i := 0; i < srcVal.NumField(); i++ {
+        field := srcVal.Field(i)
+        dstField := dstVal.Field(i)
 
-	for i, v := range p.videos {
-		if v.VideoID == processingVideo.VideoID && v.Language == processingVideo.Language {
-			p.videos[i] = processingVideo
-			return
-		}
-	}
+        if !dstField.CanSet() {
+            continue
+        }
 
-	processingVideo.Expires = timeNow.Add(20 * time.Second)
-	processingVideo.Status = StatusPending
-	p.videos = append(p.videos, processingVideo)
+        if field.Kind() == reflect.Struct && field.Type().PkgPath() == "" {
+            mergeNonZero(dstField.Addr().Interface(), field.Addr().Interface())
+            continue
+        }
+
+        if !isZero(field) {
+            dstField.Set(field)
+        }
+    }
 }
+
+
+
+
+func isZero(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.String:
+		return v.String() == ""
+	case reflect.Bool:
+		return !v.Bool()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return v.Int() == 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return v.Uint() == 0
+	case reflect.Float32, reflect.Float64:
+		return v.Float() == 0
+	case reflect.Ptr, reflect.Interface:
+		return v.IsNil()
+	case reflect.Slice, reflect.Map:
+		return v.Len() == 0
+	case reflect.Struct:
+		if t, ok := v.Interface().(time.Time); ok {
+			return t.IsZero()
+		}
+		return false
+	}
+	zero := reflect.Zero(v.Type())
+	return reflect.DeepEqual(v.Interface(), zero.Interface())
+}
+
+func (p *Processor) Videos() []ProcessingVideo {
+    p.mu.Lock()
+    defer p.mu.Unlock()
+
+    // Cria uma cópia para evitar que o chamador modifique o slice interno
+    copied := make([]ProcessingVideo, len(p.videos))
+    copy(copied, p.videos)
+    return copied
+}
+
+
+
+func (p *Processor) Add(newVideo ProcessingVideo) {
+    p.mu.Lock()
+    defer p.mu.Unlock()
+
+    timeNow := time.Now().UTC()
+
+    for i, existing := range p.videos {
+        if existing.VideoID == newVideo.VideoID && existing.Language == newVideo.Language {
+            // Merge apenas os campos que não sejam Metadata
+            if !isZero(reflect.ValueOf(newVideo.CapsDownloadUrl)) {
+                p.videos[i].CapsDownloadUrl = newVideo.CapsDownloadUrl
+            }
+            if newVideo.Status != "" {
+                p.videos[i].Status = newVideo.Status
+            }
+            if !newVideo.Expires.IsZero() {
+                p.videos[i].Expires = newVideo.Expires
+            }
+            // Merge Metadata recursivamente
+            mergeNonZero(&p.videos[i].Metadata, &newVideo.Metadata)
+			if (newVideo.Status != "") {
+				existing.Status =  newVideo.Status
+			}else{
+				if (existing.Status != "") {
+					newVideo.Status = existing.Status
+				}
+			}
+			
+            return
+        }
+    }
+
+    newVideo.Expires = timeNow.Add(20 * time.Second)
+    newVideo.Status = StatusPending
+    p.videos = append(p.videos, newVideo)
+}
+
 
 
 func (p *Processor) GetStatus(videoID string, language string) VideoStatus {
@@ -96,6 +191,20 @@ func (p *Processor) GetStatus(videoID string, language string) VideoStatus {
 		}
 	}
 	return ""
+}
+
+func (p *Processor) SetStatus(videoID string, language string, videoState VideoStatus){
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for i, v := range p.videos {
+		if v.VideoID == videoID && v.Language == language {
+			p.videos[i].Status = videoState
+			p.videos[i].Metadata.Status = string(videoState)
+			return
+		}
+	}
+	return 
 }
 
 
