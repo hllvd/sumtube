@@ -22,7 +22,7 @@ type Metadata struct {
 	ArticleUploadDateTime string `json:"article_update_datetime,omitempty"`
 	Duration              int `json:"duration,omitempty"`
 	LikeCount			  int `json:"like_count,omitempty"`
-	VideoDownload		  string `json:"video_download,omitempty"`
+	DownSubDownloadCap	  string `json:"downsub_download_cap,omitempty"`
 }
 
 type VideoStatus string
