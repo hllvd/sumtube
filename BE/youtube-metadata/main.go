@@ -54,7 +54,7 @@ func metadataHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			
 			info = convertDownSubResponseToFlatResponse(downSubReturn)
-			fmt.Printf("📤 Final response: %+v\n", info)
+			//fmt.Printf("📤 Final response: %+v\n", info)
 			//http.Error(w, "downsub not implemented", http.StatusNotImplemented)
 		default:
 			info, err = FetchDirectly(vid)

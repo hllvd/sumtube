@@ -9,11 +9,11 @@ import (
 type Metadata struct {
 	Title                 string `json:"title,omitempty"`
 	Vid                   string `json:"videoId"`
-	Content               string `json:"content,omitempty"`
 	Lang                  string `json:"lang"`
 	VideoLang         	  string `json:"video_language,omitempty"`
 	Category              string `json:"category,omitempty"`
 	Answer                string `json:"answer,omitempty"`
+	Summary               string `json:"summary,omitempty"`
 	Path                  string `json:"path,omitempty"`
 	Status                string `json:"status"` // Mandatory field
 	UploaderID            string `json:"uploader_id,omitempty"`
@@ -30,19 +30,16 @@ type VideoStatus string
 type ProcessingVideo struct {
 	VideoID          string
 	Language         string
+	SubtitleContent  string
 	Expires          time.Time
-	CapsDownloadUrl  string
 	Status           VideoStatus
 	Metadata		 Metadata
 }
 
 const (
 	StatusPending              VideoStatus = "processing-pending"
-	StatusProcessingMetadata   VideoStatus = "processing-metadata"
 	StatusMetadataProcessed    VideoStatus = "metadata-processed"
-	StatusProcessingDownload   VideoStatus = "processing-download"
 	StatusDownloadProcessed    VideoStatus = "download-processed"
-	StatusProcessingSummarize  VideoStatus = "processing-summarize"
 	StatusSummarizeProcessed   VideoStatus = "completed"
 )
 
@@ -151,9 +148,9 @@ func (p *Processor) Add(newVideo ProcessingVideo) {
     for i, existing := range p.videos {
         if existing.VideoID == newVideo.VideoID && existing.Language == newVideo.Language {
             // Merge apenas os campos que não sejam Metadata
-            if !isZero(reflect.ValueOf(newVideo.CapsDownloadUrl)) {
-                p.videos[i].CapsDownloadUrl = newVideo.CapsDownloadUrl
-            }
+            // if !isZero(reflect.ValueOf(newVideo.CapsDownloadUrl)) {
+            //     p.videos[i].CapsDownloadUrl = newVideo.CapsDownloadUrl
+            // }
             if newVideo.Status != "" {
                 p.videos[i].Status = newVideo.Status
             }

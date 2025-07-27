@@ -122,7 +122,7 @@ func TestProcessor_Add(t *testing.T) {
 		VideoID:  vid,
 		Language: lang,
 		Metadata:  Metadata{
-			Content: "Updated content",
+			Summary: "Updated content",
 		},
 	}
 	p.Add(video2)
@@ -136,8 +136,8 @@ func TestProcessor_Add(t *testing.T) {
 		t.Errorf("Expected title to remain 'Initial Title', got '%s'", meta.Title)
 	}
 
-	if meta.Content != "Updated content" {
-		t.Errorf("Expected content to be 'Updated content', got '%s'", meta.Content)
+	if meta.Summary != "Updated content" {
+		t.Errorf("Expected content to be 'Updated content', got '%s'", meta.Summary)
 	}
 }
 
@@ -175,7 +175,7 @@ func TestProcessor_Add_UpdateMultipleFields(t *testing.T) {
 	video := ProcessingVideo{
 		VideoID:  vid,
 		Language: lang,
-		Metadata: Metadata{Title: "Original Title", Content: "Original content"},
+		Metadata: Metadata{Title: "Original Title", Summary: "Original content"},
 		Status:   StatusPending,
 	}
 	p.Add(video)
@@ -185,30 +185,25 @@ func TestProcessor_Add_UpdateMultipleFields(t *testing.T) {
 	update := ProcessingVideo{
 		VideoID:         vid,
 		Language:        lang,
-		Metadata:        Metadata{Title: "Updated Title", Content: "Updated content"},
-		Status:          StatusProcessingDownload,
-		CapsDownloadUrl: "http://example.com/caps",
+		Metadata:        Metadata{Title: "Updated Title", Summary: "Updated content"},
+		Status:          StatusMetadataProcessed,
 		Expires:         newExpire,
 	}
 	p.Add(update)
 
 	meta := p.GetVideoMeta(vid, lang)
-	if meta.Title != "Updated Title" || meta.Content != "Updated content" {
-		t.Errorf("Expected metadata updated, got Title='%s' Content='%s'", meta.Title, meta.Content)
+	if meta.Title != "Updated Title" || meta.Summary != "Updated content" {
+		t.Errorf("Expected metadata updated, got Title='%s' Content='%s'", meta.Title, meta.Summary)
 	}
 
 	status := p.GetStatus(vid, lang)
-	if status != StatusProcessingDownload {
-		t.Errorf("Expected status '%s', got '%s'", StatusProcessingDownload, status)
+	if status != StatusMetadataProcessed {
+		t.Errorf("Expected status '%s', got '%s'", StatusMetadataProcessed, status)
 	}
 
 	videos := p.Videos()
 	if len(videos) != 1 {
 		t.Fatalf("Expected 1 video, got %d", len(videos))
-	}
-
-	if videos[0].CapsDownloadUrl != "http://example.com/caps" {
-		t.Errorf("Expected CapsDownloadUrl updated, got '%s'", videos[0].CapsDownloadUrl)
 	}
 
 	if !videos[0].Expires.Equal(newExpire) {
