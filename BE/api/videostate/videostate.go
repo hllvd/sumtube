@@ -43,6 +43,7 @@ const (
 	StatusSummarizeProcessed   VideoStatus = "completed"
 )
 
+
 type Processor struct {
 	mu     	sync.Mutex
 	videos []ProcessingVideo
@@ -143,14 +144,13 @@ func (p *Processor) Add(newVideo ProcessingVideo) {
     p.mu.Lock()
     defer p.mu.Unlock()
 
+	var secondsUntilExpires = 40
+
     timeNow := time.Now().UTC()
 
     for i, existing := range p.videos {
         if existing.VideoID == newVideo.VideoID && existing.Language == newVideo.Language {
-            // Merge apenas os campos que não sejam Metadata
-            // if !isZero(reflect.ValueOf(newVideo.CapsDownloadUrl)) {
-            //     p.videos[i].CapsDownloadUrl = newVideo.CapsDownloadUrl
-            // }
+
             if newVideo.Status != "" {
                 p.videos[i].Status = newVideo.Status
             }
@@ -171,7 +171,7 @@ func (p *Processor) Add(newVideo ProcessingVideo) {
         }
     }
 
-    newVideo.Expires = timeNow.Add(20 * time.Second)
+    newVideo.Expires = timeNow.Add(time.Duration(secondsUntilExpires) * time.Second)
     newVideo.Status = StatusPending
     p.videos = append(p.videos, newVideo)
 }

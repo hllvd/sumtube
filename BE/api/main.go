@@ -786,6 +786,7 @@ func getLatestVideosByCategoryFromDynamoDB(lang string, category string, minLike
 type HandleSummaryRequestResponse struct {
 	VideoID      string  `json:"videoId"`
 	Title       string  `json:"title"`
+	Path 		string  `json:"path"`
 	Lang        string  `json:"lang"`
 	Status      string  `json:"status"`
 	UploaderID  string  `json:"uploader_id"`
@@ -939,6 +940,12 @@ func processingVideoQueue(videoId string, language string) {
 			var videoMetadata = convertHandleSummaryRequestResponseToVideoStateMetadata(metadataDynamoResponse)
 
 			videoProcessingMetadataDTO.Metadata = videoMetadata
+	
+			if len(fetchMetadataResponse.Captions) == 0 {
+				log.Printf("❌ No captions found for video %s", videoId)
+				time.Sleep(1 * time.Second)
+				continue
+			}
 			var downSubUrl = fetchMetadataResponse.Captions[0].BaseURL
 			videoProcessingMetadataDTO.Metadata.DownSubDownloadCap = downSubUrl
 
@@ -968,8 +975,6 @@ func processingVideoQueue(videoId string, language string) {
 		if (videoQueue.GetStatus(videoId, language) == videostate.StatusMetadataProcessed){
 
 			metadata := videoQueue.GetVideoMeta(videoId, language)
-
-			println("metadata donloadur",metadata.DownSubDownloadCap)
 			
 			// Download Caps
 			log.Println("⏳ => Download Caps", videoId)
@@ -1026,13 +1031,11 @@ func processingVideoQueue(videoId string, language string) {
 			videoProcessingMetadataDTO.Metadata = *metadata
 			videoQueue.Add(videoProcessingMetadataDTO)
 
-			log.Println("[2] Set Status ", videostate.StatusSummarizeProcessed)
+			log.Println("🚀 [2] Set Status ", videostate.StatusSummarizeProcessed)
 			videoQueue.SetStatus(videoId, language, videostate.StatusSummarizeProcessed)
 
 			go func(){
 				var metadata = videoQueue.GetVideoMeta(videoId, language)
-				println("metadata.Answer : ", metadata.Answer)
-				println("metadata.Summary :", metadata.Summary)
 				if err := pushMetadataToDynamoDB(*metadata); err != nil {
 					log.Printf("❌ Failed to push metadata to DynamoDB: %v", err)
 				}
@@ -1040,9 +1043,16 @@ func processingVideoQueue(videoId string, language string) {
 			break
 		}
 		// Check the status
-		println("[2] GET Status: ", videoQueue.GetStatus(videoId, language))
-		time.Sleep(2 * time.Second)
+		println("Final GET Status: ", videoQueue.GetStatus(videoId, language))
+		time.Sleep(1 * time.Second)
 		ttl--
+	}
+}
+
+func dump_print_all_videos(){
+	println("⌛ [1] Printing all videos from videoQueue.Videos()")
+	for _, video := range videoQueue.Videos() {
+		println("[1] ===> VideoID: ", video.VideoID, " Language: ", video.Language, " Status: ", video.Status)
 	}
 }
 
@@ -1058,10 +1068,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
     // := queryParams.Get("force") == "true"
 
 	// print all videos from videoQueue.Videos()
-	println("⌛ [1] Printing all videos from videoQueue.Videos()")
-	for _, video := range videoQueue.Videos() {
-		println("[1] ===> VideoID: ", video.VideoID, " Language: ", video.Language, " Status: ", video.Status)
-	}
+	dump_print_all_videos()
 	
     var requestBody struct {
         VideoID  string `json:"videoId"`
@@ -1080,19 +1087,22 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         http.Error(w, fmt.Sprintf("Error extracting video ID: %v", err), http.StatusBadRequest)
         return
     }
-
+	
 	if (videoQueue.Exists(videoID, lang) == false) {
-		println("Video does not exist on queue")
-	    videoProcessingMetadataDTO := videostate.ProcessingVideo{
+		
+		println("Video does not exist on queue", videoQueue.Exists(videoID, lang))
+		dump_print_all_videos()
+	    
+		videoProcessingMetadataDTO := videostate.ProcessingVideo{
 			VideoID: videoID,
 			Language: lang,
 		}
 		videoQueue.Add(videoProcessingMetadataDTO)
-		//videoQueue.SetStatus(videoID, lang, videostate.StatusPending)
+		videoQueue.SetStatus(videoID, lang, videostate.StatusPending)
 
 		content, _ := loadContentWhenItsCached(videoID, lang)
 		metadata := videostate.Metadata{}
-		println("content.Vid = ",content.Vid, content.Summary)
+		println("content.Vid and status = ",content.Vid, content.Status, content.Path)
 		if content.Vid  != "" {
 			println("🧠 Parsing cached summary content")
 			//Convert DynamoDb fields to Metadata fields
@@ -1114,7 +1124,6 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 				DownSubDownloadCap:    content.DownSubDownloadCap,
 			}
 			
-			println("Converting Dynamo Metadata to local Metadata", content.DownSubDownloadCap)
 			videoProcessingMetadataDTO.Metadata = metadata
 			
 			println("Add video to Queue")
@@ -1151,6 +1160,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		VideoID:     videoID,
 		Title:       currentMetadata.Title,
 		Lang:        currentMetadata.Lang,
+		Path:		 currentMetadata.Path,
 		Status:      currentMetadata.Status,
 		UploaderID:  currentMetadata.UploaderID,
 		UploadDate:  currentMetadata.UploadDate,

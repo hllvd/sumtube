@@ -59,12 +59,16 @@ function YTSummarizerComponent() {
 
       switch (data.status) {
         case "processing":
+        case "processing-pending":
+        case "metadata-processed":
+        case "download-processed":
           setVideoInfo({
             videoId: data.videoId,
             uploader_id: data.uploader_id,
             title: data.title,
             duration: data.duration,
           })
+          console.log("Set timeout")
           setTimeout(() => fetchSummary(apiUrl, videoId, language), 3000)
           break
         case "completed":
