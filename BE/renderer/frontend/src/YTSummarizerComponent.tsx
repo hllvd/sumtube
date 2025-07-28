@@ -68,7 +68,6 @@ function YTSummarizerComponent() {
             title: data.title,
             duration: data.duration,
           })
-          console.log("Set timeout")
           setTimeout(() => fetchSummary(apiUrl, videoId, language), 3000)
           break
         case "completed":
