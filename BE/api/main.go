@@ -936,9 +936,14 @@ func processingVideoQueue(videoId string, language string) {
 				time.Sleep(1 * time.Second)
 				continue
 			}
+
+			if fetchMetadataResponse.Category == "" {
+				log.Printf("❌ [0] No category found for video %s", videoId)
+				continue
+			}
 			
 			var videoMetadata = convertHandleSummaryRequestResponseToVideoStateMetadata(metadataDynamoResponse)
-
+			
 			videoProcessingMetadataDTO.Metadata = videoMetadata
 	
 			if len(fetchMetadataResponse.Captions) == 0 {
@@ -960,6 +965,11 @@ func processingVideoQueue(videoId string, language string) {
 
 			go func(){
 				var metadata = videoQueue.GetVideoMeta(videoId, language)
+				if metadata.Category == "" {
+					log.Printf("❌ [2] No category found for video %s", videoId)
+				}else{
+					println("🔄 [2] printing category : ", videoMetadata.Category)
+				}
 
 				if err := pushMetadataToDynamoDB(*metadata); err != nil {
 					log.Printf("❌ Failed to push metadata to DynamoDB: %v", err)
@@ -1367,6 +1377,7 @@ func runMetadataAndCapsFetcherAsync(videoURL string, lang string) (*HandleSummar
 
 	// Get basic metadata
 	metadata, err := getVideoMetadata(videoURL)
+	println("RUN getVideoMetadata")
 	if err != nil {
 		return nil, nil, fmt.Errorf("error fetching metadata: %v", err)
 	}
