@@ -12,25 +12,25 @@ action=$1
 case $action in
     "up")
         ./start.sh down
-        if [[ "$(docker-compose ps --services | grep -w go-server)" == "go-server" ]]; then
+        if [[ "$(docker compose ps --services | grep -w go-server)" == "go-server" ]]; then
             echo "Service go-server is running"
-            docker-compose stop go-server
+            docker compose stop go-server
         fi
         echo "building frontend"
         cd renderer/frontend
         npm run build 
         cd ../..
-        echo "Running docker-compose up -d --build"
+        echo "Running docker compose up -d --build"
         # Start Docker Compose
-        docker-compose up -d --build
+        docker compose up -d --build
         ;;
     "log")
         echo "Restarting containers and showing logs..."
-        ./start.sh down && ./start.sh up && docker-compose logs --tail=20 -f -t
+        ./start.sh down && ./start.sh up && docker compose logs --tail=20 -f -t
         ;;    
     "down")
         echo "Stopping and removing containers..."
-        docker-compose down
+        docker compose down
 
         # Kill any process using port 8080
         echo "Killing processes using port 8080..."
