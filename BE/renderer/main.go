@@ -361,6 +361,7 @@ func (c *LoadController) LoadContent(w http.ResponseWriter, r *http.Request) {
     responseLang := result["lang"].(string)
     content := result["content"].(string)
     answer := result["answer"].(string)
+    duration := result["duration"].(int)
 
 	htmlContent := ConvertMarkdownToHTML(content)
     
@@ -370,6 +371,7 @@ func (c *LoadController) LoadContent(w http.ResponseWriter, r *http.Request) {
         "lang":    responseLang,
         "content": htmlContent,
         "answer":  answer,
+        "duration": duration,
     }
     
     // Send JSON response
@@ -713,16 +715,20 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
     contentTitle := result["title"].(string)
     uploaderId := result["uploader_id"].(string)
 
+    durationTest := result["duration"]
+    println("durationTest: ", durationTest)
+    durationStr := "4"
+    durationInt, _ := strconv.Atoi(durationStr)
+
+
     uploadDate := ""
     if date, ok := result["video_upload_date"].(string); ok && date != "" {
         uploadDate = formatDate(lang, date)
     }
 
     // Duração do vídeo (string tipo "PT15M22S", "15:22" etc.)
-    rawDuration, _ := result["duration"].(string)
-    videoDurationMinutes := parseDurationToMinutes(rawDuration)
     _, readingTimeMinutes := CountWordsAndReadingTime(content)
-    timeSaved := videoDurationMinutes - readingTimeMinutes
+    timeSaved := durationInt - readingTimeMinutes
     if timeSaved < 0 {
         timeSaved = 0
     }
@@ -752,8 +758,8 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
         Title:                contentTitle,
         UploadId:             uploaderId,
         UploadDate:           uploadDate,
-        Duration:             rawDuration,
-        VideoDurationMinutes: videoDurationMinutes,
+        Duration:             durationStr,
+        VideoDurationMinutes: durationInt,
         ReadingTimeMinutes:   readingTimeMinutes,
         RelatedVideosArr:     relatedVideos,
         TimeSavedMinutes:     timeSaved,

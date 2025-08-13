@@ -10,6 +10,7 @@ function YTSummarizerComponent() {
     uploader_id: string
     title: string
     duration: string
+    status: string
   }>(null)
   const [videoError, setVideoError] = useState<null | {
     errorMessage: string
@@ -60,13 +61,17 @@ function YTSummarizerComponent() {
       switch (data.status) {
         case "processing":
         case "processing-pending":
+          data.status = "Video is pending processing"
         case "metadata-processed":
+          data.status = "Medatada processed"
         case "download-processed":
+          data.status = "Download processed"
           setVideoInfo({
             videoId: data.videoId,
             uploader_id: data.uploader_id,
             title: data.title,
             duration: data.duration,
+            status: data.status,
           })
           setTimeout(() => fetchSummary(apiUrl, videoId, language), 3000)
           break
@@ -201,7 +206,7 @@ function YTSummarizerComponent() {
                 <strong>Duration:</strong> {videoInfo.duration} sec
               </p>
               <p className="text-red-500 font-medium">
-                Summarizing video… please wait
+                {videoInfo.status || "Summarizing video… please wait"}
               </p>
             </>
           ) : (
