@@ -464,6 +464,10 @@ func pushMetadataToDynamoDB(data videostate.Metadata) error {
         data.Lang: &dynamodbtypes.AttributeValueMemberS{Value: data.Path},
     }
 
+	statusMap := map[string]dynamodbtypes.AttributeValue{
+        data.Lang: &dynamodbtypes.AttributeValueMemberS{Value: data.Status},
+    }
+
     item := map[string]dynamodbtypes.AttributeValue{
         "PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("VIDEO#%s", data.Vid)},
         "SK": &dynamodbtypes.AttributeValueMemberS{Value: "METADATA"},
@@ -478,7 +482,7 @@ func pushMetadataToDynamoDB(data videostate.Metadata) error {
         "vid":                    &dynamodbtypes.AttributeValueMemberS{Value: data.Vid},
         "title":                  &dynamodbtypes.AttributeValueMemberS{Value: data.Title},
         "lang":                   &dynamodbtypes.AttributeValueMemberS{Value: data.Lang},
-        "status":                 &dynamodbtypes.AttributeValueMemberS{Value: data.Status},
+        
         "uploader_id":            &dynamodbtypes.AttributeValueMemberS{Value: data.UploaderID},
         "video_upload_date":      &dynamodbtypes.AttributeValueMemberS{Value: data.UploadDate}, // yt publish date
         "duration":               &dynamodbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", float64(data.Duration))},
@@ -490,6 +494,7 @@ func pushMetadataToDynamoDB(data videostate.Metadata) error {
         "summary": &dynamodbtypes.AttributeValueMemberM{Value: summaryMap},
         "answer":  &dynamodbtypes.AttributeValueMemberM{Value: answerMap},
         "path":    &dynamodbtypes.AttributeValueMemberM{Value: pathMap},
+		"status":  &dynamodbtypes.AttributeValueMemberM{Value: statusMap},
 
         "article_update_datetime": &dynamodbtypes.AttributeValueMemberS{Value: time.Now().Format("2006-01-02T15:04:05")},
         "like_count":              &dynamodbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%d", data.LikeCount)},
@@ -782,8 +787,27 @@ func sanitizeSubtitle(subtitle string) string {
 	return summarizedSanitized
 }
 
+type DynamoDbMetadata struct {
+    Vid                string            `json:"videoId"`                    // Primary key
+    Title              string            `json:"title,omitempty"`
+    Summary            map[string]string `json:"summary,omitempty"`          // multilingual
+    Answer             map[string]string `json:"answer,omitempty"`           // multilingual
+    Path               map[string]string `json:"path,omitempty"`             // multilingual
+    Status             map[string]string `json:"status,omitempty"`           // multilingual
+    Lang               string            `json:"lang"`                        // current language context
+    UploaderID         string            `json:"uploader_id,omitempty"`
+    UploadDate         string            `json:"video_upload_date,omitempty"`
+    Duration           float64           `json:"duration,omitempty"`
+    ChannelID          string            `json:"channel_id,omitempty"`
+    Category           string            `json:"category,omitempty"`
+    VideoLang          string            `json:"video_lang,omitempty"`
+    ArticleUpdateDate  string            `json:"article_update_datetime,omitempty"`
+    LikeCount          int               `json:"like_count,omitempty"`
+    DownSubDownloadCap string            `json:"downsub_download_cap,omitempty"`
+}
 
-func getSummaryFromDynamoDB(vid string, lang string) (map[string]dynamodbtypes.AttributeValue, error) {
+
+func getSummaryFromDynamoDB(vid string) (*DynamoDbMetadata, error) {
     key := map[string]dynamodbtypes.AttributeValue{
         "PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("VIDEO#%s", vid)},
         "SK": &dynamodbtypes.AttributeValueMemberS{Value: "METADATA"},
@@ -801,28 +825,102 @@ func getSummaryFromDynamoDB(vid string, lang string) (map[string]dynamodbtypes.A
         return nil, nil
     }
 
-    // Helper to extract the correct lang value
-    extractLangValue := func(attr dynamodbtypes.AttributeValue) dynamodbtypes.AttributeValue {
+    // Helper to convert AttributeValueMemberM to map[string]string
+    fromAttributeMap := func(attr dynamodbtypes.AttributeValue) map[string]string {
+        res := make(map[string]string)
         if m, ok := attr.(*dynamodbtypes.AttributeValueMemberM); ok {
-            if val, exists := m.Value[lang]; exists {
-                return val
+            for k, v := range m.Value {
+                if s, ok := v.(*dynamodbtypes.AttributeValueMemberS); ok {
+                    res[k] = s.Value
+                }
             }
         }
-        return &dynamodbtypes.AttributeValueMemberS{Value: ""}
+        return res
     }
 
-    // Replace the maps with just the single-language values
-    if val, ok := result.Item["summary"]; ok {
-        result.Item["summary"] = extractLangValue(val)
-    }
-    if val, ok := result.Item["answer"]; ok {
-        result.Item["answer"] = extractLangValue(val)
-    }
-    if val, ok := result.Item["path"]; ok {
-        result.Item["path"] = extractLangValue(val)
+    metadata := &DynamoDbMetadata{
+        Vid:                vid,
+        Title:              getString(result.Item["title"]),
+        Lang:               getString(result.Item["lang"]),
+        UploaderID:         getString(result.Item["uploader_id"]),
+        UploadDate:         getString(result.Item["video_upload_date"]),
+        Duration:           getFloat(result.Item["duration"]),
+        ChannelID:          getString(result.Item["channel_id"]),
+        Category:           getString(result.Item["category"]),
+        VideoLang:          getString(result.Item["video_lang"]),
+        Summary:            fromAttributeMap(result.Item["summary"]),
+        Answer:             fromAttributeMap(result.Item["answer"]),
+        Path:               fromAttributeMap(result.Item["path"]),
+        Status:             fromAttributeMap(result.Item["status"]),
+        ArticleUpdateDate:  getString(result.Item["article_update_datetime"]),
+        LikeCount:          getInt(result.Item["like_count"]),
+        DownSubDownloadCap: getString(result.Item["downsub_download_cap"]),
     }
 
-    return result.Item, nil
+    return metadata, nil
+}
+
+func filterMetadataByLang(data *DynamoDbMetadata, lang string) videostate.Metadata {
+    if data == nil {
+        return videostate.Metadata{}
+    }
+
+    // Helper to extract single language value from a map
+    getLangValue := func(m map[string]string, lang string) string {
+        if m == nil {
+            return ""
+        }
+        if val, ok := m[lang]; ok {
+            return val
+        }
+        return ""
+    }
+
+    return videostate.Metadata{
+        Vid:                   data.Vid,
+        Title:                 data.Title,
+        Lang:                  lang,
+        VideoLang:             data.VideoLang,
+        Category:              data.Category,
+        Answer:                getLangValue(data.Answer, lang),
+        Summary:               getLangValue(data.Summary, lang),
+        Path:                  getLangValue(data.Path, lang),
+        Status:                getLangValue(data.Status, lang), // Assuming Status is also multilingual
+        UploaderID:            data.UploaderID,
+        UploadDate:            data.UploadDate,
+        ChannelID:             data.ChannelID,
+        ArticleUploadDateTime: data.ArticleUpdateDate,
+        Duration:              int(data.Duration), // convert float64 to int if needed
+        LikeCount:             data.LikeCount,
+        DownSubDownloadCap:    data.DownSubDownloadCap,
+    }
+}
+
+
+// Helper functions
+func getString(attr dynamodbtypes.AttributeValue) string {
+    if s, ok := attr.(*dynamodbtypes.AttributeValueMemberS); ok {
+        return s.Value
+    }
+    return ""
+}
+
+func getInt(attr dynamodbtypes.AttributeValue) int {
+    if n, ok := attr.(*dynamodbtypes.AttributeValueMemberN); ok {
+        if val, err := strconv.Atoi(n.Value); err == nil {
+            return val
+        }
+    }
+    return 0
+}
+
+func getFloat(attr dynamodbtypes.AttributeValue) float64 {
+    if n, ok := attr.(*dynamodbtypes.AttributeValueMemberN); ok {
+        if val, err := strconv.ParseFloat(n.Value, 64); err == nil {
+            return val
+        }
+    }
+    return 0
 }
 
 
@@ -927,17 +1025,15 @@ func loadContentWhenItsCached(videoID string, lang string) (videostate.Metadata,
 		Answer  string `json:"answer"`
 	}
 
-	cachedData, err := getSummaryFromDynamoDB(videoID, lang)
+	cachedData, err := getSummaryFromDynamoDB(videoID)
 	if err != nil {
 		log.Printf("❌ Error fetching from DynamoDB: %v", err)
 		return metadata, err
 	}
 
-	var dynamoDbResponse DynamoDbResponseToJson
-	if err := attributevalue.UnmarshalMap(cachedData, &dynamoDbResponse); err != nil {
-		log.Printf("❌ Failed to unmarshal DynamoDB item: %v", err)
-		return metadata, err
-	}
+	oneLangData := filterMetadataByLang(cachedData, lang)
+
+	var dynamoDbResponse = oneLangData
 
 	log.Printf("✅ Loaded DynamoDB content: status=%s, title=%s", dynamoDbResponse.Status, dynamoDbResponse.Title)
 
@@ -959,36 +1055,9 @@ func loadContentWhenItsCached(videoID string, lang string) (videostate.Metadata,
 			Duration:              dynamoDbResponse.Duration,
 			LikeCount: 			   dynamoDbResponse.LikeCount,
 			ChannelID: 			   dynamoDbResponse.ChannelID,
-			DownSubDownloadCap:    dynamoDbResponse.DownsubDownloadCap,
+			DownSubDownloadCap:    dynamoDbResponse.DownSubDownloadCap,
 		}, nil
 	}
-
-	// Se já tem conteúdo válido
-	// if cachedData != nil && dynamoDbResponse.Content != "" {
-	// 	log.Printf("🧠 Parsing to Json content when loading DynamoDb")
-	// 	parsedContent, err := parseJSONContent(dynamoDbResponse.Content)
-	// 	if err != nil {
-	// 		log.Printf("❌ Error parsing summary field: %v", err)
-	// 		return metadata, err
-	// 	}
-
-	// 	return videostate.Metadata{
-	// 		Title:                 dynamoDbResponse.Title,
-	// 		Vid:                   videoID,
-	// 		Content:               parsedContent["content"],
-	// 		Category:              dynamoDbResponse.Category,
-	// 		Lang:                  dynamoDbResponse.Lang,
-	// 		Answer:                parsedContent["answer"],
-	// 		Path:                  dynamoDbResponse.Path,
-	// 		Status:                dynamoDbResponse.Status,
-	// 		UploaderID:            dynamoDbResponse.UploaderID,
-	// 		UploadDate:            dynamoDbResponse.UploadDate,
-	// 		ArticleUploadDateTime: dynamoDbResponse.ArticleUploadDateTime,
-	// 		Duration:              dynamoDbResponse.Duration,
-	// 		LikeCount: 			   dynamoDbResponse.LikeCount,
-	// 		ChannelID: 			   dynamoDbResponse.ChannelID,
-	// 	}, nil
-	// }
 
 	log.Println("ℹ️ No valid cached data found.")
 	return metadata, nil
