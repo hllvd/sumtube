@@ -40,9 +40,41 @@ func metadataHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing 'vid' query parameter", http.StatusBadRequest)
 		return
 	}
-
 	var info *YoutubeMetadataResponse
 	var err error
+	
+	// if video is WExJh9b9e2E id return the json above
+
+	itShouldBegSrcc0oA6Q4 := []byte(`{
+		"title": "Jornalista da GloboNews revela maior medo do Supremo! Assista",
+		"view_count": "241573",
+		"length_seconds": "581",
+		"channel_id": "UC84asuWqcrFqEtWqSCtS85Q",
+		"channel_name": "Deltan Dallagnol",
+		"channel_url": "http://www.youtube.com/@DeltanDallagnolOficial",
+		"publish_date": "2025-06-27T07:35:11-07:00",
+		"category": "News & Politics",
+		"captions": [
+			{
+				"base_url": "https://www.youtube.com/api/timedtext?v=gSrcc0oA6Q4&ei=HvBgaK2GDe2P-LAPh7mtsA4&caps=asr&opi=112496729&exp=xpe&xoaf=5&hl=pt&ip=0.0.0.0&ipbits=0&expire=1751208590&sparams=ip,ipbits,expire,v,ei,caps,opi,exp,xoaf&signature=37D3BBE06906CBC8948A630882804AAA229088BD.79E1E24DE53BFC76079F288B67710F55D1E66368&key=yt8&kind=asr&lang=pt&variant=punctuated",
+				"lang": "pt"
+			}
+		]
+	}`)
+
+	if vid == "gSrcc0oA6Q4" {
+		err = json.Unmarshal(itShouldBegSrcc0oA6Q4, &info)
+		if err != nil {
+			log.Fatal("error unmarshalling JSON:", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(info)
+		return
+	}
+	
+	
+
+
 
 	switch method {
 		case "downsub":
