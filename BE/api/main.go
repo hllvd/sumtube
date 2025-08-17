@@ -356,49 +356,7 @@ func fetchS3(key string) (string, error) {
     return string(content), nil
 }
 
-func pushSummaryToDynamoDB(data HandleSummaryRequestResponse, summary string, path string) error {
-    // Pad LikeCount to 8 digits for correct lexicographic sort
-    paddedLikeCount := fmt.Sprintf("%08d", data.LikeCount)
-	dateTimeNow := time.Now().Format("2006-01-02 15:04")
 
-    item := map[string]dynamodbtypes.AttributeValue{
-        "PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("LANG#%s#VIDEO#%s", data.Lang, data.VideoID)},
-        "SK": &dynamodbtypes.AttributeValueMemberS{Value: "METADATA"},
-
-        // GSI for querying by category and LikeCount
-        "GSI1PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("LANG#%s#CATEGORY#%s",data.Lang, data.Category,)},
-        "GSI1SK": &dynamodbtypes.AttributeValueMemberS{
-            Value: fmt.Sprintf("SUM_DT#%s#LIKE_COUNT#%s", dateTimeNow, paddedLikeCount),
-        },
-
-        // Main data fields
-        "vid":          &dynamodbtypes.AttributeValueMemberS{Value: data.VideoID},
-        "title":        &dynamodbtypes.AttributeValueMemberS{Value: data.Title},
-        "lang":         &dynamodbtypes.AttributeValueMemberS{Value: data.Lang},
-        "status":       &dynamodbtypes.AttributeValueMemberS{Value: data.Status},
-        "uploader_id":  &dynamodbtypes.AttributeValueMemberS{Value: data.UploaderID},
-        "video_upload_date":  &dynamodbtypes.AttributeValueMemberS{Value: data.UploadDate},			//yt publish date
-        "duration":     &dynamodbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", float64(data.Duration))},
-        "channel_id":   &dynamodbtypes.AttributeValueMemberS{Value: data.ChannelID},
-        "category":     &dynamodbtypes.AttributeValueMemberS{Value: data.Category},
-        "video_lang":   &dynamodbtypes.AttributeValueMemberS{Value: data.VideoLang},
-        "summary":      &dynamodbtypes.AttributeValueMemberS{Value: summary},
-		"article_update_datetime": &dynamodbtypes.AttributeValueMemberS{Value: time.Now().Format("2006-01-02T15:04:05")}, //sumtube publish timestamp
-        "path":         &dynamodbtypes.AttributeValueMemberS{Value: path},
-        "like_count":    &dynamodbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%d", data.LikeCount)},
-    }
-
-    _, err := dynamoDBClient.PutItem(context.Background(), &dynamodb.PutItemInput{
-        TableName: aws.String(dynamoDBTableName),
-        Item:      item,
-    })
-    if err != nil {
-        return fmt.Errorf("failed to push to DynamoDB: %w", err)
-    }
-
-    fmt.Println("Data pushed to DynamoDB successfully.")
-    return nil
-}
 
 // func pushMetadataToDynamoDB(data videostate.Metadata) error {
 //     // Pad LikeCount to 8 digits for correct lexicographic sort
@@ -445,6 +403,13 @@ func pushSummaryToDynamoDB(data HandleSummaryRequestResponse, summary string, pa
 //     fmt.Println("Data pushed to DynamoDB successfully.")
 //     return nil
 // }
+func stringMapToAttributeValueMap(m map[string]string) map[string]dynamodbtypes.AttributeValue {
+    avMap := make(map[string]dynamodbtypes.AttributeValue)
+    for k, v := range m {
+        avMap[k] = &dynamodbtypes.AttributeValueMemberS{Value: v}
+    }
+    return avMap
+}
 
 func pushMetadataToDynamoDB(data videostate.Metadata) error {
     // Pad LikeCount to 8 digits for correct lexicographic sort
@@ -464,6 +429,10 @@ func pushMetadataToDynamoDB(data videostate.Metadata) error {
         data.Lang: &dynamodbtypes.AttributeValueMemberS{Value: data.Path},
     }
 
+	statusMap := map[string]dynamodbtypes.AttributeValue{
+        data.Lang: &dynamodbtypes.AttributeValueMemberS{Value: data.Status},
+    }
+
     item := map[string]dynamodbtypes.AttributeValue{
         "PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("VIDEO#%s", data.Vid)},
         "SK": &dynamodbtypes.AttributeValueMemberS{Value: "METADATA"},
@@ -478,7 +447,7 @@ func pushMetadataToDynamoDB(data videostate.Metadata) error {
         "vid":                    &dynamodbtypes.AttributeValueMemberS{Value: data.Vid},
         "title":                  &dynamodbtypes.AttributeValueMemberS{Value: data.Title},
         "lang":                   &dynamodbtypes.AttributeValueMemberS{Value: data.Lang},
-        "status":                 &dynamodbtypes.AttributeValueMemberS{Value: data.Status},
+
         "uploader_id":            &dynamodbtypes.AttributeValueMemberS{Value: data.UploaderID},
         "video_upload_date":      &dynamodbtypes.AttributeValueMemberS{Value: data.UploadDate}, // yt publish date
         "duration":               &dynamodbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", float64(data.Duration))},
@@ -490,6 +459,8 @@ func pushMetadataToDynamoDB(data videostate.Metadata) error {
         "summary": &dynamodbtypes.AttributeValueMemberM{Value: summaryMap},
         "answer":  &dynamodbtypes.AttributeValueMemberM{Value: answerMap},
         "path":    &dynamodbtypes.AttributeValueMemberM{Value: pathMap},
+		"status":  &dynamodbtypes.AttributeValueMemberM{Value: statusMap},
+
 
         "article_update_datetime": &dynamodbtypes.AttributeValueMemberS{Value: time.Now().Format("2006-01-02T15:04:05")},
         "like_count":              &dynamodbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%d", data.LikeCount)},
