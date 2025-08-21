@@ -12,10 +12,10 @@ type Metadata struct {
 	Lang                  string `json:"lang"`
 	VideoLang         	  string `json:"video_language,omitempty"`
 	Category              string `json:"category,omitempty"`
-	Answer                string `json:"answer,omitempty"`
-	Summary               string `json:"summary,omitempty"`
-	Path                  string `json:"path,omitempty"`
-	Status                string `json:"status"` // Mandatory field
+    Summary            map[string]string `json:"summary,omitempty"`          // multilingual
+    Answer             map[string]string `json:"answer,omitempty"`           // multilingual
+    Path               map[string]string `json:"path,omitempty"`             // multilingual
+    Status             map[string]string `json:"status,omitempty"`           // multilingual
 	UploaderID            string `json:"uploader_id,omitempty"`
 	UploadDate            string `json:"video_upload_date,omitempty"`
 	ChannelID			  string `json:"channel_id,omitempty"`
@@ -197,7 +197,10 @@ func (p *Processor) SetStatus(videoID string, language string, videoState VideoS
 	for i, v := range p.videos {
 		if v.VideoID == videoID && v.Language == language {
 			p.videos[i].Status = videoState
-			p.videos[i].Metadata.Status = string(videoState)
+			if p.videos[i].Metadata.Status == nil {
+				p.videos[i].Metadata.Status = make(map[string]string)
+			}
+			p.videos[i].Metadata.Status[language] = string(videoState)
 			return
 		}
 	}

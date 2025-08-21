@@ -373,21 +373,7 @@ func pushMetadataToDynamoDB(data videostate.Metadata) error {
     dateTimeNow := time.Now().Format("2006-01-02 15:04")
 
     // Build maps for multilingual fields
-    summaryMap := map[string]dynamodbtypes.AttributeValue{
-        data.Lang: &dynamodbtypes.AttributeValueMemberS{Value: data.Summary},
-    }
 
-    answerMap := map[string]dynamodbtypes.AttributeValue{
-        data.Lang: &dynamodbtypes.AttributeValueMemberS{Value: data.Answer},
-    }
-
-    pathMap := map[string]dynamodbtypes.AttributeValue{
-        data.Lang: &dynamodbtypes.AttributeValueMemberS{Value: data.Path},
-    }
-
-	statusMap := map[string]dynamodbtypes.AttributeValue{
-        data.Lang: &dynamodbtypes.AttributeValueMemberS{Value: data.Status},
-    }
 
     item := map[string]dynamodbtypes.AttributeValue{
         "PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("VIDEO#%s", data.Vid)},
@@ -412,10 +398,10 @@ func pushMetadataToDynamoDB(data videostate.Metadata) error {
         "video_lang":             &dynamodbtypes.AttributeValueMemberS{Value: data.VideoLang},
 
         // Now stored as Maps
-        "summary": &dynamodbtypes.AttributeValueMemberM{Value: summaryMap},
-        "answer":  &dynamodbtypes.AttributeValueMemberM{Value: answerMap},
-        "path":    &dynamodbtypes.AttributeValueMemberM{Value: pathMap},
-		"status":  &dynamodbtypes.AttributeValueMemberM{Value: statusMap},
+        "summary": &dynamodbtypes.AttributeValueMemberM{Value: stringMapToAttributeValueMap(data.Summary)},
+        "answer":  &dynamodbtypes.AttributeValueMemberM{Value: stringMapToAttributeValueMap(data.Answer)},
+        "path":    &dynamodbtypes.AttributeValueMemberM{Value: stringMapToAttributeValueMap(data.Path)},
+		"status":  &dynamodbtypes.AttributeValueMemberM{Value: stringMapToAttributeValueMap(data.Status)},
 
 
         "article_update_datetime": &dynamodbtypes.AttributeValueMemberS{Value: time.Now().Format("2006-01-02T15:04:05")},
@@ -729,25 +715,25 @@ func getSummaryFromDynamoDB(vid string, lang string) (map[string]dynamodbtypes.A
     }
 
     // Helper to extract the correct lang value
-    extractLangValue := func(attr dynamodbtypes.AttributeValue) dynamodbtypes.AttributeValue {
-        if m, ok := attr.(*dynamodbtypes.AttributeValueMemberM); ok {
-            if val, exists := m.Value[lang]; exists {
-                return val
-            }
-        }
-        return &dynamodbtypes.AttributeValueMemberS{Value: ""}
-    }
+    // extractLangValue := func(attr dynamodbtypes.AttributeValue) dynamodbtypes.AttributeValue {
+    //     if m, ok := attr.(*dynamodbtypes.AttributeValueMemberM); ok {
+    //         if val, exists := m.Value[lang]; exists {
+    //             return val
+    //         }
+    //     }
+    //     return &dynamodbtypes.AttributeValueMemberS{Value: ""}
+    // }
 
-    // Replace the maps with just the single-language values
-    if val, ok := result.Item["summary"]; ok {
-        result.Item["summary"] = extractLangValue(val)
-    }
-    if val, ok := result.Item["answer"]; ok {
-        result.Item["answer"] = extractLangValue(val)
-    }
-    if val, ok := result.Item["path"]; ok {
-        result.Item["path"] = extractLangValue(val)
-    }
+    // // Replace the maps with just the single-language values
+    // if val, ok := result.Item["summary"]; ok {
+    //     result.Item["summary"] = extractLangValue(val)
+    // }
+    // if val, ok := result.Item["answer"]; ok {
+    //     result.Item["answer"] = extractLangValue(val)
+    // }
+    // if val, ok := result.Item["path"]; ok {
+    //     result.Item["path"] = extractLangValue(val)
+    // }
 
     return result.Item, nil
 }
@@ -801,9 +787,11 @@ func getLatestVideosByCategoryFromDynamoDB(lang string, category string, minLike
 type HandleSummaryRequestResponse struct {
 	VideoID      string  `json:"videoId"`
 	Title       string  `json:"title"`
-	Path 		string  `json:"path"`
+	Path 		map[string]string  `json:"path"`
+	Content	    map[string]string	`json:"content"`
+	Answer	    map[string]string	`json:"answer"`
+	Status      map[string]string  `json:"status"`
 	Lang        string  `json:"lang"`
-	Status      string  `json:"status"`
 	UploaderID  string  `json:"uploader_id"`
 	UploadDate  string  `json:"video_upload_date"`
 	ArticleUploadDateTime string `json:"article_update_datetime"`
@@ -812,8 +800,7 @@ type HandleSummaryRequestResponse struct {
 	Category    string  `json:"category"`
 	VideoLang   string  `json:"video_lang"`
 	LikeCount 	int		`json:"like_count"`
-	Content	    string	`json:"content"`
-	Answer	    string	`json:"answer"`
+	
 }
 type VideoGPTSummary struct {
 	Answer  string `json:"answer"`
@@ -825,13 +812,13 @@ type VideoGPTSummary struct {
 type DynamoDbResponseToJson struct {
     Title      			string `dynamodbav:"title" json:"title"`
     Vid        			string `dynamodbav:"vid" json:"vid"`
-    Summary     		string `dynamodbav:"summary" json:"content"`
-	Answer     			string `dynamodbav:"answer" json:"answer"`
+    Summary     		map[string]string `dynamodbav:"summary" json:"content"`
+	Answer     			map[string]string `dynamodbav:"answer" json:"answer"`
+	Path       			map[string]string `dynamodbav:"path" json:"path"`
+    Status     			map[string]string `dynamodbav:"status" json:"status"`
 	Category   			string `dynamodbav:"category" json:"category"`
 	LikeCount  			int    `dynamodbav:"like_count" json:"like_count"`
     Lang       			string `dynamodbav:"lang" json:"lang"`
-    Path       			string `dynamodbav:"path" json:"path"`
-    Status     			string `dynamodbav:"status" json:"status"`
     UploaderID 			string `dynamodbav:"uploader_id" json:"uploaderId"`
     UploadDate 			string `dynamodbav:"video_upload_date" json:"uploadDate"`
 	ArticleUploadDateTime string `dynamodbav:"article_update_datetime" json:"articleUploadDateTime"`
@@ -869,7 +856,7 @@ func loadContentWhenItsCached(videoID string, lang string) (videostate.Metadata,
 	log.Printf("✅ Loaded DynamoDB content: status=%s, title=%s", dynamoDbResponse.Status, dynamoDbResponse.Title)
 
 	// Check if it's processing in DynamoDb
-	if dynamoDbResponse.Status != "" {
+	if dynamoDbResponse.Status[lang] != "" {
 		
 		return videostate.Metadata{
 			Title:                 dynamoDbResponse.Title,
@@ -956,9 +943,9 @@ func processingVideoQueue(videoId string, language string) {
 				log.Printf("❌ [0] No category found for video %s", videoId)
 				continue
 			}
-			
+			log.Println("before convertHandleSummary")
 			var videoMetadata = convertHandleSummaryRequestResponseToVideoStateMetadata(metadataDynamoResponse)
-			
+			log.Println("after convertHandleSummary")
 			videoProcessingMetadataDTO.Metadata = videoMetadata
 	
 			if len(fetchMetadataResponse.Captions) == 0 {
@@ -970,7 +957,7 @@ func processingVideoQueue(videoId string, language string) {
 			videoProcessingMetadataDTO.Metadata.DownSubDownloadCap = downSubUrl
 
 			var path = convertTitleToURL(videoMetadata.Title)
-			videoProcessingMetadataDTO.Metadata.Path = path 
+			videoProcessingMetadataDTO.Metadata.Path[language] = path 
 			
 			log.Println("🔄 Update metadata on videoProcessing : ", videoId)
 			videoQueue.Add(videoProcessingMetadataDTO)
@@ -1050,8 +1037,15 @@ func processingVideoQueue(videoId string, language string) {
 				time.Sleep(1 * time.Second)
 				continue
 			}
-			*&metadata.Answer = summaryJson.Answer
-			*&metadata.Summary = summaryJson.Content
+			if metadata.Answer== nil {
+				metadata.Answer = make(map[string]string)
+			}
+			metadata.Answer[language] = summaryJson.Answer
+
+			if metadata.Summary == nil {
+				metadata.Summary = make (map[string]string)
+			}
+			metadata.Summary[language] = summaryJson.Content
 
 			videoProcessingMetadataDTO.Metadata = *metadata
 			videoQueue.Add(videoProcessingMetadataDTO)
@@ -1094,6 +1088,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 
 	// print all videos from videoQueue.Videos()
 	dump_print_all_videos()
+	println("dump_print_all_videos 1")
 	
     var requestBody struct {
         VideoID  string `json:"videoId"`
@@ -1112,20 +1107,24 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         http.Error(w, fmt.Sprintf("Error extracting video ID: %v", err), http.StatusBadRequest)
         return
     }
-	
+	println("videoQueue.Exists")
 	if (videoQueue.Exists(videoID, lang) == false) {
 		
 		println("Video does not exist on queue", videoQueue.Exists(videoID, lang))
 		dump_print_all_videos()
+		println("dump_print_all_videos 2")
 	    
 		videoProcessingMetadataDTO := videostate.ProcessingVideo{
 			VideoID: videoID,
 			Language: lang,
 		}
+		println("Add video to Queue")
 		videoQueue.Add(videoProcessingMetadataDTO)
+		println("Set Status", videostate.StatusPending)
 		videoQueue.SetStatus(videoID, lang, videostate.StatusPending)
-
+		println("Processing video async")
 		content, _ := loadContentWhenItsCached(videoID, lang)
+		println("loading metadata")
 		metadata := videostate.Metadata{}
 		println("content.Vid and status = ",content.Vid, content.Status, content.Path)
 		if content.Vid  != "" {
@@ -1154,8 +1153,8 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 			println("Add video to Queue")
 			videoQueue.Add(videoProcessingMetadataDTO)
 
-			println("Set Status", videostate.VideoStatus(metadata.Status))
-			videoQueue.SetStatus(videoID, lang, videostate.VideoStatus(metadata.Status))
+			println("Set Status", videostate.VideoStatus(metadata.Status[lang]))
+			videoQueue.SetStatus(videoID, lang, videostate.VideoStatus(metadata.Status[lang]))
 			
 			println("Processing video sync", videoID, lang)
 			// Processing video sync
@@ -1366,15 +1365,30 @@ func runWithTimeout(timeout time.Duration, fn func() error) error {
 }
 
 func convertHandleSummaryRequestResponseToVideoStateMetadata(metadata *HandleSummaryRequestResponse) videostate.Metadata {
+	// check if content, anser path and status is nil. if it is initialize map
+	
+	if metadata.Status == nil{
+		metadata.Status = make(map[string]string)
+	}
+	
+	if metadata.Answer == nil{
+		metadata.Answer = make(map[string]string)
+	}
+	if metadata.Content == nil{
+		metadata.Content = make(map[string]string)
+	}
+	if metadata.Path == nil{
+		metadata.Path = make(map[string]string)
+	}
 	return videostate.Metadata{
 		Title:                 metadata.Title,
 		Vid:                   metadata.VideoID,
 		Status:                metadata.Status,
 		Summary:               metadata.Content,
 		Answer:                metadata.Answer,
+		Path:                  metadata.Path,
 		Category:              metadata.Category,
 		Lang:                  metadata.Lang,
-		Path:                  "",
 		UploaderID:            metadata.UploaderID,
 		UploadDate:            metadata.UploadDate,
 		ChannelID: 			   metadata.ChannelID,
@@ -1397,12 +1411,13 @@ func runMetadataAndCapsFetcherAsync(videoURL string, lang string) (*HandleSummar
 		return nil, nil, fmt.Errorf("error fetching metadata: %v", err)
 	}
 
-	status := "processing"
+	status := make(map[string]string)
+	status[lang] = "processing"
 	captionLang := ""
 	if len(metadata.Captions) > 0 {
 		captionLang = metadata.Captions[0].Lang
 	} else {
-		status = "caps_not_found"
+		status[lang] = "caps_not_found"
 	}
 
 	durationInt, err := strconv.Atoi(metadata.LengthSeconds)
