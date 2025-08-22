@@ -36,9 +36,9 @@ type Metadata struct {
 	Author string `json:"author"`
 	ChannelId string `json:"channelId"`
 	ChannelUrl string `json:"channelUrl"`
-	Description string `json:"description"`
+	Description string `json:"description,omitempty"`
 	PublishDate string `json:"publishDate"`
-	Category string `json:"category"`
+	Category string `json:"category,omitempty"`
 	ViewCount string `json:"viewCount,omitempty"`
 }
 
