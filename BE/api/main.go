@@ -858,11 +858,6 @@ func loadContentWhenItsCached(videoID string, lang string) (videostate.Metadata,
 	
 	// Check if it's processing in DynamoDb
 	if dynamoDbResponse.Status != nil{
-		status := dynamoDbResponse.Status
-
-		if (status[lang] == "" && len(status) > 0 ) {
-			status[lang] = string(videostate.StatusDownloadProcessed)
-		}
 		
 		return videostate.Metadata{
 			Title:                 dynamoDbResponse.Title,
@@ -872,7 +867,7 @@ func loadContentWhenItsCached(videoID string, lang string) (videostate.Metadata,
 			Lang:                  lang,
 			Answer:                dynamoDbResponse.Answer,
 			Path:                  dynamoDbResponse.Path,
-			Status:                status,
+			Status:                dynamoDbResponse.Status,
 			UploaderID:            dynamoDbResponse.UploaderID,
 			UploadDate:            dynamoDbResponse.UploadDate,
 			ArticleUploadDateTime: dynamoDbResponse.ArticleUploadDateTime,
@@ -1143,11 +1138,16 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		println("content.Vid and status = ",content.Vid, content.Status, content.Path)
 		if content.Vid  != "" {
 			println("🧠 Parsing cached summary content")
+			status := content.Status
+
+			if (status[lang] == "" && len(status) > 0 ) {
+				status[lang] = string(videostate.StatusDownloadProcessed)
+			}
 			//Convert DynamoDb fields to Metadata fields
 			metadata = videostate.Metadata{
 				Title:                 content.Title,
 				Vid:                   content.Vid,
-				Status:                content.Status,
+				Status:                status,
 				Summary:               content.Summary,
 				Answer:                content.Answer,
 				Category:              content.Category,
@@ -1161,7 +1161,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 				LikeCount: 			   content.LikeCount,
 				DownSubDownloadCap:    content.DownSubDownloadCap,
 			}
-			
+
 			videoProcessingMetadataDTO.Metadata = metadata
 			
 			println("Add video to Queue")
@@ -1172,8 +1172,9 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 			
 			println("Processing video sync", videoID, lang)
 			// Processing video sync
-
-			processingVideoQueue(videoID, lang)
+			go func(){
+				processingVideoQueue(videoID, lang)
+			}()
 			
 		} else {
 			println("Processing video async")
