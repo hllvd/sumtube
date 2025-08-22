@@ -39,7 +39,7 @@ type Metadata struct {
 	Description string `json:"description"`
 	PublishDate string `json:"publishDate"`
 	Category string `json:"category"`
-	ViewCount string `json:"viewCount"`
+	ViewCount string `json:"viewCount,omitempty"`
 }
 
 var (
