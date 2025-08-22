@@ -40,6 +40,7 @@ const (
 	StatusPending              VideoStatus = "processing-pending"
 	StatusMetadataProcessed    VideoStatus = "metadata-processed"
 	StatusDownloadProcessed    VideoStatus = "download-processed"
+	StatusDownloadAWSProcessed VideoStatus = "download-aws-processed"
 	StatusSummarizeProcessed   VideoStatus = "completed"
 )
 

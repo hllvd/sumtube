@@ -855,8 +855,14 @@ func loadContentWhenItsCached(videoID string, lang string) (videostate.Metadata,
 
 	log.Printf("✅ Loaded DynamoDB content: status=%s, title=%s", dynamoDbResponse.Status, dynamoDbResponse.Title)
 
+	
 	// Check if it's processing in DynamoDb
-	if dynamoDbResponse.Status[lang] != "" {
+	if dynamoDbResponse.Status != nil{
+		status := dynamoDbResponse.Status
+
+		if (status[lang] == "" && len(status) > 0 ) {
+			status[lang] = string(videostate.StatusDownloadProcessed)
+		}
 		
 		return videostate.Metadata{
 			Title:                 dynamoDbResponse.Title,
@@ -866,7 +872,7 @@ func loadContentWhenItsCached(videoID string, lang string) (videostate.Metadata,
 			Lang:                  lang,
 			Answer:                dynamoDbResponse.Answer,
 			Path:                  dynamoDbResponse.Path,
-			Status:                dynamoDbResponse.Status,
+			Status:                status,
 			UploaderID:            dynamoDbResponse.UploaderID,
 			UploadDate:            dynamoDbResponse.UploadDate,
 			ArticleUploadDateTime: dynamoDbResponse.ArticleUploadDateTime,
@@ -957,7 +963,10 @@ func processingVideoQueue(videoId string, language string) {
 			videoProcessingMetadataDTO.Metadata.DownSubDownloadCap = downSubUrl
 
 			var path = convertTitleToURL(videoMetadata.Title)
-			videoProcessingMetadataDTO.Metadata.Path[language] = path 
+			if videoProcessingMetadataDTO.Metadata.Path == nil {
+				videoProcessingMetadataDTO.Metadata.Path = make(map[string]string)
+			}
+			videoProcessingMetadataDTO.Metadata.Path[language] = path
 			
 			log.Println("🔄 Update metadata on videoProcessing : ", videoId)
 			videoQueue.Add(videoProcessingMetadataDTO)
@@ -1017,7 +1026,6 @@ func processingVideoQueue(videoId string, language string) {
 				}
 			}()
 		}
-
 		
 		println(">>>>>>>> BEFORE Summarize")
 		if (videoQueue.GetStatus(videoId, language) == videostate.StatusDownloadProcessed){
