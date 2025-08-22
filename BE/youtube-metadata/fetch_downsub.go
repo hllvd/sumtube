@@ -36,10 +36,10 @@ type Metadata struct {
 	Author string `json:"author"`
 	ChannelId string `json:"channelId"`
 	ChannelUrl string `json:"channelUrl"`
-	Description string `json:"description,omitempty"`
+	Description string `json:"description"`
 	PublishDate string `json:"publishDate"`
-	Category string `json:"category,omitempty"`
-	ViewCount string `json:"viewCount,omitempty"`
+	Category string `json:"category"`
+	ViewCount json.Number `json:"viewCount"`
 }
 
 var (
@@ -132,6 +132,7 @@ func convertDownSubResponseToFlatResponse(downsubInfo *DownsubResponse) *Youtube
 		}
 	}
 
+	vcStr := downsubInfo.Data.Metadata.ViewCount.String()
 	return &YoutubeMetadataResponse{
 		Title:             downsubInfo.Data.Title,
 		LengthSeconds:     fmt.Sprintf("%d", downsubInfo.Data.Duration),
@@ -140,7 +141,7 @@ func convertDownSubResponseToFlatResponse(downsubInfo *DownsubResponse) *Youtube
 		ChannelUrl:        downsubInfo.Data.Metadata.ChannelUrl,
 		PublishDate:       downsubInfo.Data.Metadata.PublishDate,
 		Category:          downsubInfo.Data.Metadata.Category,
-		ViewCount:         downsubInfo.Data.Metadata.ViewCount,
+		ViewCount:         vcStr,
 		Captions:          captions,
 	}
 }
