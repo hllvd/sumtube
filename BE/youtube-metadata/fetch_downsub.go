@@ -132,6 +132,7 @@ func convertDownSubResponseToFlatResponse(downsubInfo *DownsubResponse) *Youtube
 		}
 	}
 
+	//sometmes viewcount cames from the API as string and sometimes as int. it fix this issue
 	vcStr := downsubInfo.Data.Metadata.ViewCount.String()
 	return &YoutubeMetadataResponse{
 		Title:             downsubInfo.Data.Title,
