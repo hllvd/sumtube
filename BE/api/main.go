@@ -819,6 +819,7 @@ type DynamoDbResponseToJson struct {
 	Category   			string `dynamodbav:"category" json:"category"`
 	LikeCount  			int    `dynamodbav:"like_count" json:"like_count"`
     Lang       			string `dynamodbav:"lang" json:"lang"`
+	VideoLang  			string `dynamodbav:"video_lang" json:"videoLang"`
     UploaderID 			string `dynamodbav:"uploader_id" json:"uploaderId"`
     UploadDate 			string `dynamodbav:"video_upload_date" json:"uploadDate"`
 	ArticleUploadDateTime string `dynamodbav:"article_update_datetime" json:"articleUploadDateTime"`
@@ -875,6 +876,7 @@ func loadContentWhenItsCached(videoID string, lang string) (videostate.Metadata,
 			LikeCount: 			   dynamoDbResponse.LikeCount,
 			ChannelID: 			   dynamoDbResponse.ChannelID,
 			DownSubDownloadCap:    dynamoDbResponse.DownsubDownloadCap,
+			VideoLang: 		       dynamoDbResponse.VideoLang,
 		}, nil
 	}
 
@@ -1152,6 +1154,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 				Answer:                content.Answer,
 				Category:              content.Category,
 				Lang:                  content.Lang,
+				VideoLang: 	   		   content.VideoLang,
 				Path:                  content.Path,
 				UploaderID:            content.UploaderID,
 				UploadDate:            content.UploadDate,
@@ -1199,6 +1202,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		VideoID:     videoID,
 		Title:       currentMetadata.Title,
 		Lang:        currentMetadata.Lang,
+		VideoLang:   currentMetadata.VideoLang,
 		Path:		 currentMetadata.Path,
 		Status:      currentMetadata.Status,
 		UploaderID:  currentMetadata.UploaderID,
@@ -1207,7 +1211,6 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		ArticleUploadDateTime: currentMetadata.ArticleUploadDateTime,
 		Duration:    currentMetadata.Duration,
 		Category:    currentMetadata.Category,
-		VideoLang:   currentMetadata.Lang,
 		LikeCount:   currentMetadata.LikeCount,
 		Content:	 currentMetadata.Summary,
 		Answer:		 currentMetadata.Answer,
@@ -1298,6 +1301,7 @@ func convertHandleSummaryRequestResponseToVideoStateMetadata(metadata *HandleSum
 		ArticleUploadDateTime: metadata.ArticleUploadDateTime,
 		Duration:              metadata.Duration,
 		LikeCount: 			   metadata.LikeCount,
+		VideoLang: 			   metadata.VideoLang,
 	}
 }
 

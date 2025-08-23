@@ -10,7 +10,7 @@ type Metadata struct {
 	Title                 string `json:"title,omitempty"`
 	Vid                   string `json:"videoId"`
 	Lang                  string `json:"lang"`
-	VideoLang         	  string `json:"video_language,omitempty"`
+	VideoLang         	  string `json:"video_lang,omitempty"`
 	Category              string `json:"category,omitempty"`
     Summary            map[string]string `json:"summary,omitempty"`          // multilingual
     Answer             map[string]string `json:"answer,omitempty"`           // multilingual
