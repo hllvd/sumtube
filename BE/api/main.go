@@ -369,7 +369,7 @@ func stringMapToAttributeValueMap(m map[string]string) map[string]dynamodbtypes.
 
 func pushMetadataToDynamoDB(data videostate.Metadata) error {
     // Pad LikeCount to 8 digits for correct lexicographic sort
-    paddedLikeCount := fmt.Sprintf("%08d", data.LikeCount)
+    // paddedLikeCount := fmt.Sprintf("%08d", data.LikeCount)
     dateTimeNow := time.Now().Format("2006-01-02 15:04")
 
     // Build maps for multilingual fields
@@ -380,9 +380,9 @@ func pushMetadataToDynamoDB(data videostate.Metadata) error {
         "SK": &dynamodbtypes.AttributeValueMemberS{Value: "METADATA"},
 
         // GSI for querying by category and LikeCount
-        "GSI1PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("LANG#%s#CATEGORY#%s", data.Lang, data.Category)},
+        "GSI1PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("LANG#%s", data.VideoLang)},
         "GSI1SK": &dynamodbtypes.AttributeValueMemberS{
-            Value: fmt.Sprintf("SUM_DT#%s#LIKE_COUNT#%s", dateTimeNow, paddedLikeCount),
+            Value: fmt.Sprintf("CHANNEL_ID#%s#CREATED#%s", data.ChannelID, dateTimeNow),
         },
 
         // Main data fields
@@ -423,22 +423,33 @@ func pushMetadataToDynamoDB(data videostate.Metadata) error {
 }
 
 
-
-
-
-func pushCategoryStatsToDynamoDB(categoryName string, likes int, vid string, date string) error {
-    compositeKey := fmt.Sprintf("%s#%d#%s", categoryName, likes, date)
+func pushCategoryStatsToDynamoDB(data videostate.Metadata, lang string) error {
+    // Pad LikeCount to 8 digits for correct lexicographic sort
+    paddedLikeCount := fmt.Sprintf("%08d", data.LikeCount)
+    dateTimeNow := time.Now().Format("2006-01-02 15:04")
 
     item := map[string]dynamodbtypes.AttributeValue{
-        "id": &dynamodbtypes.AttributeValueMemberS{Value: compositeKey},
-        "data": &dynamodbtypes.AttributeValueMemberM{
-            Value: map[string]dynamodbtypes.AttributeValue{
-                "category": &dynamodbtypes.AttributeValueMemberS{Value: categoryName},
-                "likes":    &dynamodbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%d", likes)},
-                "vid":      &dynamodbtypes.AttributeValueMemberS{Value: vid},
-                "date":     &dynamodbtypes.AttributeValueMemberS{Value: date},
-            },
+        "PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("LANG#%s", lang)},
+        "SK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("CAT#%s#CREATED#%s", data.Category, dateTimeNow)},
+
+        // GSI for querying by category and LikeCount
+        "GSI1PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("CAT#%s", data.Category)},
+        "GSI1SK": &dynamodbtypes.AttributeValueMemberS{
+            Value: fmt.Sprintf("LANG#%s#LIKES#%s", lang, paddedLikeCount),
         },
+
+        // Main data fields
+        "vid":                    &dynamodbtypes.AttributeValueMemberS{Value: data.Vid},
+        "lang":                   &dynamodbtypes.AttributeValueMemberS{Value: lang},
+        "uploader_id":            &dynamodbtypes.AttributeValueMemberS{Value: data.UploaderID},
+        "video_upload_date":      &dynamodbtypes.AttributeValueMemberS{Value: data.UploadDate}, // yt publish date
+        "category":               &dynamodbtypes.AttributeValueMemberS{Value: data.Category},
+
+        // Now stored as Maps
+		"title":   &dynamodbtypes.AttributeValueMemberS{Value: data.Title[lang]},
+        "path":    &dynamodbtypes.AttributeValueMemberS{Value: data.Path[lang]},
+
+        "like_count":              &dynamodbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%d", data.LikeCount)},
     }
 
     _, err := dynamoDBClient.PutItem(context.Background(), &dynamodb.PutItemInput{
@@ -446,10 +457,10 @@ func pushCategoryStatsToDynamoDB(categoryName string, likes int, vid string, dat
         Item:      item,
     })
     if err != nil {
-        return fmt.Errorf("failed to push category stats to DynamoDB: %w", err)
+        return fmt.Errorf("failed to push to DynamoDB: %w", err)
     }
 
-    fmt.Println("Category stats pushed to DynamoDB successfully.")
+    fmt.Println("Data pushed to DynamoDB successfully.")
     return nil
 }
 
@@ -808,6 +819,24 @@ type HandleSummaryRequestResponse struct {
 	Category    string  `json:"category"`
 	VideoLang   string  `json:"video_lang"`
 	LikeCount 	int		`json:"like_count"`
+}
+
+type HandleSummarySingleLanguageRequestResponse struct {
+	VideoID      	string  `json:"videoId"`
+	Title        	string  `json:"title"`
+	Path 		 	string  `json:"path"`
+	Content	     	string	`json:"content"`
+	Answer	     	string	`json:"answer"`
+	Status       	string  `json:"status"`
+	Lang        	string  `json:"lang"`
+	UploaderID  	string  `json:"uploader_id"`
+	UploadDate  	string  `json:"video_upload_date"`
+	ArticleUploadDateTime string `json:"article_update_datetime"`
+	Duration    	int 	`json:"duration"`
+	ChannelID   	string  `json:"channel_id"`
+	Category    	string  `json:"category"`
+	VideoLang   	string  `json:"video_lang"`
+	LikeCount 		int		`json:"like_count"`
 	
 }
 type VideoGPTSummary struct {
@@ -887,33 +916,6 @@ func loadContentWhenItsCached(videoID string, lang string) (videostate.Metadata,
 			VideoLang: 		       dynamoDbResponse.VideoLang,
 		}, nil
 	}
-
-	// Se já tem conteúdo válido
-	// if cachedData != nil && dynamoDbResponse.Content != "" {
-	// 	log.Printf("🧠 Parsing to Json content when loading DynamoDb")
-	// 	parsedContent, err := parseJSONContent(dynamoDbResponse.Content)
-	// 	if err != nil {
-	// 		log.Printf("❌ Error parsing summary field: %v", err)
-	// 		return metadata, err
-	// 	}
-
-	// 	return videostate.Metadata{
-	// 		Title:                 dynamoDbResponse.Title,
-	// 		Vid:                   videoID,
-	// 		Content:               parsedContent["content"],
-	// 		Category:              dynamoDbResponse.Category,
-	// 		Lang:                  dynamoDbResponse.Lang,
-	// 		Answer:                parsedContent["answer"],
-	// 		Path:                  dynamoDbResponse.Path,
-	// 		Status:                dynamoDbResponse.Status,
-	// 		UploaderID:            dynamoDbResponse.UploaderID,
-	// 		UploadDate:            dynamoDbResponse.UploadDate,
-	// 		ArticleUploadDateTime: dynamoDbResponse.ArticleUploadDateTime,
-	// 		Duration:              dynamoDbResponse.Duration,
-	// 		LikeCount: 			   dynamoDbResponse.LikeCount,
-	// 		ChannelID: 			   dynamoDbResponse.ChannelID,
-	// 	}, nil
-	// }
 
 	log.Println("ℹ️ No valid cached data found.")
 	return metadata, nil
@@ -1081,8 +1083,13 @@ func processingVideoQueue(videoId string, language string) {
 				var metadata = videoQueue.GetVideoMeta(videoId, language)
 				if err := pushMetadataToDynamoDB(*metadata); err != nil {
 					log.Printf("❌ Failed to push metadata to DynamoDB: %v", err)
+				}else{
+					if err := pushCategoryStatsToDynamoDB(*metadata, language); err != nil{
+						log.Printf("❌ Failed to push category to DynamoDB: %v", err)
+					}
 				}
 			}()
+
 			break
 		}
 		// Check the status
@@ -1099,6 +1106,25 @@ func dump_print_all_videos(){
 	}
 }
 
+func convertMultilingualToSingleLingual(multilingual *HandleSummaryRequestResponse, language string) *HandleSummarySingleLanguageRequestResponse {
+	return &HandleSummarySingleLanguageRequestResponse{
+		VideoID:		    multilingual.VideoID,
+		Path: 				multilingual.Path[language],
+		Title: 				multilingual.Title[language],
+		Answer: 			multilingual.Answer[language],
+		Content: 			multilingual.Content[language],
+		Status: 			multilingual.Status[language],			
+		Lang:               multilingual.VideoLang,
+		UploaderID:         multilingual.UploaderID,
+		UploadDate:         multilingual.UploadDate,   
+		ArticleUploadDateTime: multilingual.ArticleUploadDateTime,
+		Duration:           multilingual.Duration,
+		ChannelID:          multilingual.ChannelID,
+		Category:           multilingual.Category,
+		VideoLang:          multilingual.VideoLang,
+		LikeCount:          multilingual.LikeCount,
+	}
+}
 
 func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
     if r.Method != http.MethodPost {
@@ -1229,9 +1255,11 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		Answer:		 currentMetadata.Answer,
 	}
 
+	singleLangResponse := convertMultilingualToSingleLingual(&response, lang)
+
 	log.Printf("Processing videoID=%s,", videoID)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	json.NewEncoder(w).Encode(singleLangResponse)
 	return
     
 }
