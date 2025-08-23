@@ -39,7 +39,7 @@ type Metadata struct {
 	Description string `json:"description"`
 	PublishDate string `json:"publishDate"`
 	Category string `json:"category"`
-	ViewCount string `json:"viewCount"`
+	ViewCount json.Number `json:"viewCount"`
 }
 
 var (
@@ -132,6 +132,8 @@ func convertDownSubResponseToFlatResponse(downsubInfo *DownsubResponse) *Youtube
 		}
 	}
 
+	//sometmes viewcount cames from the API as string and sometimes as int. it fix this issue
+	vcStr := downsubInfo.Data.Metadata.ViewCount.String()
 	return &YoutubeMetadataResponse{
 		Title:             downsubInfo.Data.Title,
 		LengthSeconds:     fmt.Sprintf("%d", downsubInfo.Data.Duration),
@@ -140,7 +142,7 @@ func convertDownSubResponseToFlatResponse(downsubInfo *DownsubResponse) *Youtube
 		ChannelUrl:        downsubInfo.Data.Metadata.ChannelUrl,
 		PublishDate:       downsubInfo.Data.Metadata.PublishDate,
 		Category:          downsubInfo.Data.Metadata.Category,
-		ViewCount:         downsubInfo.Data.Metadata.ViewCount,
+		ViewCount:         vcStr,
 		Captions:          captions,
 	}
 }
