@@ -7,15 +7,15 @@ import (
 )
 
 type Metadata struct {
-	Title                 string `json:"title,omitempty"`
+	Title                 map[string]string `json:"title,omitempty"`			// multilingual
 	Vid                   string `json:"videoId"`
 	Lang                  string `json:"lang"`
 	VideoLang         	  string `json:"video_lang,omitempty"`
 	Category              string `json:"category,omitempty"`
-    Summary            map[string]string `json:"summary,omitempty"`          // multilingual
-    Answer             map[string]string `json:"answer,omitempty"`           // multilingual
-    Path               map[string]string `json:"path,omitempty"`             // multilingual
-    Status             map[string]string `json:"status,omitempty"`           // multilingual
+    Summary            	  map[string]string `json:"summary,omitempty"`          // multilingual
+    Answer                map[string]string `json:"answer,omitempty"`           // multilingual
+    Path               	  map[string]string `json:"path,omitempty"`             // multilingual
+    Status             	  map[string]string `json:"status,omitempty"`           // multilingual
 	UploaderID            string `json:"uploader_id,omitempty"`
 	UploadDate            string `json:"video_upload_date,omitempty"`
 	ChannelID			  string `json:"channel_id,omitempty"`

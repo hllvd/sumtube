@@ -387,7 +387,7 @@ func pushMetadataToDynamoDB(data videostate.Metadata) error {
 
         // Main data fields
         "vid":                    &dynamodbtypes.AttributeValueMemberS{Value: data.Vid},
-        "title":                  &dynamodbtypes.AttributeValueMemberS{Value: data.Title},
+
         "lang":                   &dynamodbtypes.AttributeValueMemberS{Value: data.Lang},
 
         "uploader_id":            &dynamodbtypes.AttributeValueMemberS{Value: data.UploaderID},
@@ -398,6 +398,7 @@ func pushMetadataToDynamoDB(data videostate.Metadata) error {
         "video_lang":             &dynamodbtypes.AttributeValueMemberS{Value: data.VideoLang},
 
         // Now stored as Maps
+		"title":   &dynamodbtypes.AttributeValueMemberM{Value: stringMapToAttributeValueMap(data.Title)},
         "summary": &dynamodbtypes.AttributeValueMemberM{Value: stringMapToAttributeValueMap(data.Summary)},
         "answer":  &dynamodbtypes.AttributeValueMemberM{Value: stringMapToAttributeValueMap(data.Answer)},
         "path":    &dynamodbtypes.AttributeValueMemberM{Value: stringMapToAttributeValueMap(data.Path)},
@@ -738,7 +739,14 @@ func getSummaryFromDynamoDB(vid string, lang string) (map[string]dynamodbtypes.A
     return result.Item, nil
 }
 
-
+func firstNonEmptyFromMap(m map[string]string) string {
+    for _, v := range m {
+        if v != "" {
+            return v
+        }
+    }
+    return "" // if all are empty
+}
 
 
 func getLatestVideosByCategoryFromDynamoDB(lang string, category string, minLikes int, limit int) ([]map[string]dynamodbtypes.AttributeValue, error) {
@@ -786,7 +794,7 @@ func getLatestVideosByCategoryFromDynamoDB(lang string, category string, minLike
 
 type HandleSummaryRequestResponse struct {
 	VideoID      string  `json:"videoId"`
-	Title       string  `json:"title"`
+	Title       map[string]string  `json:"title"`
 	Path 		map[string]string  `json:"path"`
 	Content	    map[string]string	`json:"content"`
 	Answer	    map[string]string	`json:"answer"`
@@ -810,8 +818,8 @@ type VideoGPTSummary struct {
 }
 
 type DynamoDbResponseToJson struct {
-    Title      			string `dynamodbav:"title" json:"title"`
-    Vid        			string `dynamodbav:"vid" json:"vid"`
+	Vid        			string `dynamodbav:"vid" json:"vid"`
+    Title      			map[string]string `dynamodbav:"title" json:"title"`
     Summary     		map[string]string `dynamodbav:"summary" json:"content"`
 	Answer     			map[string]string `dynamodbav:"answer" json:"answer"`
 	Path       			map[string]string `dynamodbav:"path" json:"path"`
@@ -959,7 +967,7 @@ func processingVideoQueue(videoId string, language string) {
 			var downSubUrl = fetchMetadataResponse.Captions[0].BaseURL
 			videoProcessingMetadataDTO.Metadata.DownSubDownloadCap = downSubUrl
 
-			var path = convertTitleToURL(videoMetadata.Title)
+			var path = convertTitleToURL(videoMetadata.Title[language])
 			if videoProcessingMetadataDTO.Metadata.Path == nil {
 				videoProcessingMetadataDTO.Metadata.Path = make(map[string]string)
 			}
@@ -1036,13 +1044,18 @@ func processingVideoQueue(videoId string, language string) {
 				subtitle, _ = fetchS3(subtitleKey)
 			}
 
-			var path = convertTitleToURL(metadata.Title)
+			// set the same title for other languages
+			// here is where we can translate the title so the path would be translated as well.
+			title := firstNonEmptyFromMap(metadata.Title)
+			metadata.Title[language] = title
+
+			var path = convertTitleToURL(metadata.Title[language])
 			if metadata.Path == nil {
 				metadata.Path = make(map[string]string)
 			}
 			metadata.Path[language] = path
 			
-			summaryJson, err := summarizeSubtitle(subtitle, language, metadata.Title)
+			summaryJson, err := summarizeSubtitle(subtitle, language, metadata.Title[language])
 			if (err != nil) {
 				log.Printf("❌ Failed to summarize subtitle: %v", err)
 				time.Sleep(1 * time.Second)
@@ -1273,6 +1286,10 @@ func runWithTimeout(timeout time.Duration, fn func() error) error {
 func convertHandleSummaryRequestResponseToVideoStateMetadata(metadata *HandleSummaryRequestResponse) videostate.Metadata {
 	// check if content, anser path and status is nil. if it is initialize map
 	
+	if metadata.Title == nil {
+		metadata.Title = make(map[string]string)
+	}
+
 	if metadata.Status == nil{
 		metadata.Status = make(map[string]string)
 	}
@@ -1333,17 +1350,22 @@ func runMetadataAndCapsFetcherAsync(videoURL string, lang string) (*HandleSummar
 		durationInt = 0
 	}
 
-	//TODO
+
 	likeCountInt, err := strconv.Atoi(metadata.ViewCount)
 	if err != nil {
 		log.Printf("⚠️ Failed to convert like count to int: %v", err)
 		likeCountInt = 0
 	}
 
+	var title map[string]string 
+	if title == nil {
+		title =  make(map[string]string)
+	}
+	title[lang] = metadata.Title
 	// Build response object
 	metadataResponse := &HandleSummaryRequestResponse{
 		VideoID:     videoID,
-		Title:       metadata.Title,
+		Title:       title,
 		Lang:        lang,
 		Status:      status,
 		UploaderID:  metadata.ChannelID,
