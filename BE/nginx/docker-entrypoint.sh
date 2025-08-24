@@ -48,9 +48,4 @@ envsubst '${TRANSCRIPT_PY_SERVER_HOST} ${TRANSCRIPT_PY_SERVER_PORT} ${SERVER_NAM
 envsubst '${METADATA_SERVER_HOST} ${METADATA_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/youtube-metadata.conf.template > /etc/nginx/conf.d/youtube-metadata.conf
 
 
-else
-  echo "Running in DEV mode (HTTP only)"
-fi
-
-
 exec nginx -g "daemon off;"
