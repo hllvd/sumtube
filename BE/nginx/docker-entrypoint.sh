@@ -57,7 +57,7 @@ server {
 
     # 👇 Allow ACME challenges to pass on plain HTTP
     location /.well-known/acme-challenge/ {
-        root /app/static;
+        alias /app/static;
     }
 
     # Redirect everything else to HTTPS
