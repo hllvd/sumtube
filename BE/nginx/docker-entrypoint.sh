@@ -54,8 +54,8 @@ server {
     listen 443 ssl;
     server_name $DOMAIN $API_SUBDOMAIN;
 
-    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+    #ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+    #ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
 
     location / {
         proxy_pass http://${GO_SERVER_HOST}:${GO_SERVER_PORT};
@@ -75,10 +75,6 @@ server {
         try_files $uri $uri/ =404;
     }
 
-    # Redirect everything else to HTTPS
-    #location / {
-        # return 301 https://\$host\$request_uri;
-    #}
 }
 EOF
 else
