@@ -12,33 +12,43 @@ echo "METADATA_SERVER_PORT=$METADATA_SERVER_PORT"
 echo "ENV=$ENV"
 echo "DOMAIN=$DOMAIN"
 echo "API_SUBDOMAIN=$API_SUBDOMAIN"
-echo "ENABLE_HTTPS=$ENABLE_HTTPS"
 
 # Ensure required variables are not empty
-for var in GO_SERVER_HOST GO_SERVER_PORT RENDERER_SERVER_HOST RENDERER_SERVER_PORT TRANSCRIPT_PY_SERVER_HOST TRANSCRIPT_PY_SERVER_PORT METADATA_SERVER_HOST METADATA_SERVER_PORT; do
-  if [ -z "${!var}" ]; then
-    echo "Missing $var environment variable"
-    exit 1
-  fi
-done
+if [ -z "$GO_SERVER_HOST" ] || [ -z "$GO_SERVER_PORT" ]; then
+  echo "Missing GO_SERVER_* environment variables"
+  exit 1
+fi
 
-# Server name block
+if [ -z "$RENDERER_SERVER_HOST" ] || [ -z "$RENDERER_SERVER_PORT" ]; then
+  echo "Missing RENDERER_SERVER_* environment variables"
+  exit 1
+fi
+
+if [ -z "$TRANSCRIPT_PY_SERVER_HOST" ] || [ -z "$TRANSCRIPT_PY_SERVER_PORT" ]; then
+  echo "Missing TRANSCRIPT_PY_SERVER_* environment variables"
+  exit 1
+fi
+
+if [ -z "$METADATA_SERVER_HOST" ] || [ -z "$METADATA_SERVER_PORT" ]; then
+  echo "Missing METADATA_SERVER_* environment variables"
+  exit 1
+fi
+
+# Use server_name only in production
 if [ "$ENV" = "production" ]; then
   export SERVER_NAME_BLOCK="server_name $API_SUBDOMAIN;"
 else
   export SERVER_NAME_BLOCK=""
 fi
 
-# Generate base configs from templates
+# Generate final configs
 envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/api.conf.template > /etc/nginx/conf.d/api.conf
 envsubst '${RENDERER_SERVER_HOST} ${RENDERER_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/renderer.conf.template > /etc/nginx/conf.d/renderer.conf
 envsubst '${TRANSCRIPT_PY_SERVER_HOST} ${TRANSCRIPT_PY_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/transcript-py.conf.template > /etc/nginx/conf.d/transcript-py.conf
 envsubst '${METADATA_SERVER_HOST} ${METADATA_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/youtube-metadata.conf.template > /etc/nginx/conf.d/youtube-metadata.conf
 
-# Check if certs exist
-CERT_PATH="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
-if [ "$ENABLE_HTTPS" = "true" ] && [ -f "$CERT_PATH" ]; then
-  echo "Certificates found, enabling HTTPS..."
+if [ "$ENABLE_HTTPS" = "true" ]; then
+  echo "Enabling HTTPS for $DOMAIN"
   cat > /etc/nginx/conf.d/ssl.conf <<EOF
 server {
     listen 443 ssl;
@@ -60,38 +70,20 @@ server {
     listen 80;
     server_name $DOMAIN $API_SUBDOMAIN;
 
-    # Serve ACME challenge
+    # 👇 Allow ACME challenges to pass on plain HTTP
     location /.well-known/acme-challenge/ {
         root /app/static;
     }
 
-    # Redirect all other HTTP requests to HTTPS
+    # Redirect everything else to HTTPS
     location / {
         return 301 https://\$host\$request_uri;
-    }
-}
-EOF
-
-elif [ "$ENABLE_HTTPS" = "true" ]; then
-  echo "Certificates not found yet, running HTTP-only for ACME challenge..."
-  cat > /etc/nginx/conf.d/ssl.conf <<EOF
-server {
-    listen 80;
-    server_name $DOMAIN $API_SUBDOMAIN;
-
-    # Serve ACME challenge
-    location /.well-known/acme-challenge/ {
-        root /app/static;
-    }
-
-    # Serve a simple page for root
-    location / {
-        return 200 'Certbot will generate HTTPS certificates shortly.';
     }
 }
 EOF
 else
   echo "Running in DEV mode (HTTP only)"
 fi
+
 
 exec nginx -g "daemon off;"
