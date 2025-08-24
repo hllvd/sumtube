@@ -61,12 +61,30 @@ services:
       - ./youtube-metadata/nginx/youtube-metadata.conf.template:/etc/nginx/conf.d/youtube-metadata.conf.template
       - ./nginx/docker-entrypoint.sh:/docker-entrypoint.sh
       - ./renderer/static:/app/static
+      - /etc/letsencrypt:/etc/letsencrypt
+      - /var/lib/letsencrypt:/var/lib/letsencrypt
       - /dev/null:/etc/nginx/conf.d/default.conf
     entrypoint: ["/docker-entrypoint.sh"]
     depends_on:
       - go-server
       - renderer-server
       - youtube-transcript-py-server
+    networks:
+      - app-network
+
+  certbot:
+    image: certbot/certbot
+    container_name: certbot
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt
+      - /var/lib/letsencrypt:/var/lib/letsencrypt
+      - ./renderer/static:/app/static
+    entrypoint: >
+      sh -c "if [ \"$ENABLE_HTTPS\" = 'true' ]; then
+        certbot certonly --webroot -w /app/static -d sumtube.io -d api.sumtube.io --email you@email.com --agree-tos --non-interactive;
+      else
+        echo 'Skipping certbot (dev mode)';
+      fi"
     networks:
       - app-network
 
