@@ -50,21 +50,6 @@ envsubst '${METADATA_SERVER_HOST} ${METADATA_SERVER_PORT} ${SERVER_NAME_BLOCK}' 
 if [ "$ENABLE_HTTPS" = "true" ]; then
   echo "Enabling HTTPS for $DOMAIN"
   cat > /etc/nginx/conf.d/ssl.conf <<EOF
-server {
-    listen 443 ssl;
-    server_name $DOMAIN $API_SUBDOMAIN;
-
-    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
-
-    location / {
-        proxy_pass http://${GO_SERVER_HOST}:${GO_SERVER_PORT};
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-}
 
 server {
     listen 80;
