@@ -60,6 +60,11 @@ server {
         try_files $uri $uri/ =404;
     }
 
+    # Redirect everything else to HTTPS
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+
 }
 EOF
 else
