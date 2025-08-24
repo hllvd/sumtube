@@ -76,16 +76,16 @@ services:
   certbot:
     image: certbot/certbot
     container_name: certbot
+    env_file:
+      - ./nginx/.env
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt
       - /var/lib/letsencrypt:/var/lib/letsencrypt
       - ./renderer/static:/app/static
-    entrypoint: >
-      sh -c "if [ \"$ENABLE_HTTPS\" = 'true' ]; then
-        certbot certonly --webroot -w /app/static -d sumtube.io -d api.sumtube.io --email vandal.hudson@gmail.com --agree-tos --non-interactive;
-      else
-        echo 'Skipping certbot (dev mode)';
-      fi"
+      - ./certbot/cert-entrypoint.sh:/cert-entrypoint.sh
+    entrypoint: ["/cert-entrypoint.sh"]
+    depends_on:
+      - nginx
     networks:
       - app-network
 
