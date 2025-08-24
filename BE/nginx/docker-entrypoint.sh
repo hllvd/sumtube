@@ -72,7 +72,8 @@ server {
 
     # 👇 Allow ACME challenges to pass on plain HTTP
     location /.well-known/acme-challenge/ {
-        root /app/static;
+        alias /app/static/;
+        try_files $uri $uri/ =404;
     }
 
     # Redirect everything else to HTTPS
