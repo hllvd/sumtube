@@ -47,28 +47,7 @@ envsubst '${RENDERER_SERVER_HOST} ${RENDERER_SERVER_PORT} ${SERVER_NAME_BLOCK}' 
 envsubst '${TRANSCRIPT_PY_SERVER_HOST} ${TRANSCRIPT_PY_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/transcript-py.conf.template > /etc/nginx/conf.d/transcript-py.conf
 envsubst '${METADATA_SERVER_HOST} ${METADATA_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/youtube-metadata.conf.template > /etc/nginx/conf.d/youtube-metadata.conf
 
-if [ "$ENABLE_HTTPS" = "true" ]; then
-  echo "Enabling HTTPS for $DOMAIN"
-  cat > /etc/nginx/conf.d/ssl.conf <<EOF
 
-server {
-    listen 80;
-    server_name $DOMAIN $API_SUBDOMAIN;
-
-    # 👇 Allow ACME challenges to pass on plain HTTP
-    location /.well-known/acme-challenge/ {
-        alias /app/static;
-    }
-
-    # Redirect everything else to HTTPS
-    location / {
-        return 301 https://\$host\$request_uri;
-    }
-}
-EOF
-else
-  echo "Running in DEV mode (HTTP only)"
-fi
 
 
 exec nginx -g "daemon off;"
