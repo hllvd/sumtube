@@ -70,16 +70,15 @@ server {
     listen 80;
     server_name $DOMAIN $API_SUBDOMAIN;
 
-    # 👇 Allow ACME challenges to pass on plain HTTP
     location /.well-known/acme-challenge/ {
         alias /app/static/;
         try_files $uri $uri/ =404;
     }
 
     # Redirect everything else to HTTPS
-    location / {
-        return 301 https://\$host\$request_uri;
-    }
+    #location / {
+        # return 301 https://\$host\$request_uri;
+    #}
 }
 EOF
 else
