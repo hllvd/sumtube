@@ -58,7 +58,6 @@ server {
 
     location /.well-known/acme-challenge/ {
         alias /app/static/;
-        try_files $uri $uri/ =404;
     }
 
 }
