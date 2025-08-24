@@ -69,11 +69,21 @@ server {
 server {
     listen 80;
     server_name $DOMAIN $API_SUBDOMAIN;
-    return 301 https://\$host\$request_uri;
+
+    # 👇 Allow ACME challenges to pass on plain HTTP
+    location /.well-known/acme-challenge/ {
+        root /app/static;
+    }
+
+    # Redirect everything else to HTTPS
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
 }
 EOF
 else
   echo "Running in DEV mode (HTTP only)"
 fi
+
 
 exec nginx -g "daemon off;"
