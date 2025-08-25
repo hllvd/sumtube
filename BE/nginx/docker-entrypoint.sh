@@ -42,33 +42,65 @@ else
 fi
 
 # Generate final configs
-envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/api.conf.template > /etc/nginx/conf.d/api.conf
+
+if [ "$ENABLE_API" = "true" ]; then
+  echo "ENABLE_API is on"
+  if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+    echo "Loading ssl config with redirections for $DOMAIN"
+    envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/ssl.conf.template > /etc/nginx/conf.d/ssl.conf
+  else 
+    echo "Loading prod config - without redirection - for $DOMAIN"
+    envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/api-prod.conf.template > /etc/nginx/conf.d/api-prod.conf
+  fi
+else
+  echo "Loading devconfig"
+   envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/api-dev.conf.template > /etc/nginx/conf.d/api-dev.conf
+fi
+
 envsubst '${RENDERER_SERVER_HOST} ${RENDERER_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/renderer.conf.template > /etc/nginx/conf.d/renderer.conf
 envsubst '${TRANSCRIPT_PY_SERVER_HOST} ${TRANSCRIPT_PY_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/transcript-py.conf.template > /etc/nginx/conf.d/transcript-py.conf
 envsubst '${METADATA_SERVER_HOST} ${METADATA_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/youtube-metadata.conf.template > /etc/nginx/conf.d/youtube-metadata.conf
 
+
+# check if ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem; exists
+
 if [ "$ENABLE_HTTPS" = "true" ]; then
   echo "Enabling HTTPS for $DOMAIN"
+  if [ ! -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+    echo "SSL certificate not found for $DOMAIN"
+    
+  else
   cat > /etc/nginx/conf.d/ssl.conf <<EOF
+  server {
+    listen 443 ssl;
+    server_name $DOMAIN $API_SUBDOMAIN;
 
-server {
+    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+
+    location / {
+        proxy_pass http://${GO_SERVER_HOST}:${GO_SERVER_PORT};
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+  }
+  server {
     listen 80;
+    server_name $DOMAIN $API_SUBDOMAIN;
 
-    # 👇 Allow ACME challenges to pass on plain HTTP
     location /.well-known/acme-challenge/ {
         alias /app/static/;
-        try_files $uri $uri/ =404;
     }
 
-    # Redirect everything else to HTTPS
-    location / {
-        return 301 https://\$host\$request_uri;
-    }
-
-}
+  }
 EOF
+  fi
+  
+
 else
-  echo "Running in DEV mode (HTTP only)"
+  echo "ENABLE_HTTPS is off"
 fi
 
 

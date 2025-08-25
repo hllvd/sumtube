@@ -56,7 +56,9 @@ services:
     env_file:
       - ./nginx/.env
     volumes:
-      - ./api/nginx/api.conf.template:/etc/nginx/conf.d/api.conf.template
+      - ./api/nginx/api-dev.conf.template:/etc/nginx/conf.d/api-dev.conf.template
+      - ./api/nginx/api-prod.conf.template:/etc/nginx/conf.d/api-prod.conf.template
+      - ./api/nginx/ssl.conf.template:/etc/nginx/conf.d/ssl.conf.template
       - ./renderer/nginx/renderer.conf.template:/etc/nginx/conf.d/renderer.conf.template
       - ./youtube-transcript-py/nginx/transcript-py.conf.template:/etc/nginx/conf.d/transcript-py.conf.template
       - ./youtube-metadata/nginx/youtube-metadata.conf.template:/etc/nginx/conf.d/youtube-metadata.conf.template
