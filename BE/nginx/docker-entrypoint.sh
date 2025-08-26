@@ -51,7 +51,7 @@ if [ "$ENABLE_HTTPS" = "true" ]; then
     envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/ssl.conf.template > /etc/nginx/conf.d/ssl.conf
   else 
     echo "Loading prod config - without redirection - for $DOMAIN"
-    envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/api-dev.conf.template > /etc/nginx/conf.d/api-dev.conf
+    envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/api-prod.conf.template > /etc/nginx/conf.d/api-prod.conf
   fi
 else
   echo "Loading devconfig"
