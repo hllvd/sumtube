@@ -12,6 +12,7 @@ echo "METADATA_SERVER_PORT=$METADATA_SERVER_PORT"
 echo "ENV=$ENV"
 echo "DOMAIN=$DOMAIN"
 echo "API_SUBDOMAIN=$API_SUBDOMAIN"
+echo "ENABLE_HTTPS=$ENABLE_HTTPS"
 
 # Ensure required variables are not empty
 if [ -z "$GO_SERVER_HOST" ] || [ -z "$GO_SERVER_PORT" ]; then
@@ -43,8 +44,8 @@ fi
 
 # Generate final configs
 
-if [ "$ENABLE_API" = "true" ]; then
-  echo "ENABLE_API is on"
+if [ "$ENABLE_HTTPS" = "true" ]; then
+  echo "ENABLE_HTTPS is on"
   if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
     echo "Loading ssl config with redirections for $DOMAIN"
     envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/ssl.conf.template > /etc/nginx/conf.d/ssl.conf
