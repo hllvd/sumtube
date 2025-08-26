@@ -45,20 +45,33 @@ fi
 # Generate final configs
 
 if [ "$ENABLE_HTTPS" = "true" ]; then
-  echo "ENABLE_HTTPS is on "
+  echo "ENABLE_HTTPS is on"
+  
+  # Handle main domain
   if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
     echo "Loading ssl config with redirections for $DOMAIN"
-    envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/ssl.conf.template > /etc/nginx/conf.d/ssl.conf
+    envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/renderer-ssl.conf.template > /etc/nginx/conf.d/renderer-ssl.conf
   else 
     echo "Loading prod config - without redirection - for $DOMAIN"
+    envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/renderer-prod.conf.template > /etc/nginx/conf.d/renderer-prod.conf
+  fi
+
+  # Handle api domain
+  if [ -f "/etc/letsencrypt/live/$API_SUBDOMAIN/fullchain.pem" ]; then
+    echo "Loading ssl config with redirections for $API_SUBDOMAIN"
+    envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/ssl.conf.template > /etc/nginx/conf.d/ssl.conf
+  else 
+    echo "Loading prod config - without redirection - for $DOMAIN and $API_SUBDOMAIN"
     envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/api-prod.conf.template > /etc/nginx/conf.d/api-prod.conf
   fi
+
 else
   echo "Loading devconfig"
    envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/api-dev.conf.template > /etc/nginx/conf.d/api-dev.conf
+   envsubst '${RENDERER_SERVER_HOST} ${RENDERER_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/renderer.conf.template > /etc/nginx/conf.d/renderer.conf
 fi
 
-envsubst '${RENDERER_SERVER_HOST} ${RENDERER_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/renderer.conf.template > /etc/nginx/conf.d/renderer.conf
+
 envsubst '${TRANSCRIPT_PY_SERVER_HOST} ${TRANSCRIPT_PY_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/transcript-py.conf.template > /etc/nginx/conf.d/transcript-py.conf
 envsubst '${METADATA_SERVER_HOST} ${METADATA_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/youtube-metadata.conf.template > /etc/nginx/conf.d/youtube-metadata.conf
 
