@@ -12,9 +12,9 @@ action=$1
 case $action in
     "up")
         ./start.sh down
-        if [[ "$(docker compose ps --services | grep -w go-server)" == "go-server" ]]; then
-            echo "Service go-server is running"
-            docker compose stop go-server
+        if [[ "$(docker compose ps --services | grep -w api-server)" == "api-server" ]]; then
+            echo "Service api-server is running"
+            docker compose stop api-server
         fi
         echo "building frontend"
         cd renderer/frontend
