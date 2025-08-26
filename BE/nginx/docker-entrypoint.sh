@@ -45,7 +45,7 @@ fi
 # Generate final configs
 
 if [ "$ENABLE_HTTPS" = "true" ]; then
-  echo "ENABLE_HTTPS is on"
+  echo "ENABLE_HTTPS is on "
   if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
     echo "Loading ssl config with redirections for $DOMAIN"
     envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/ssl.conf.template > /etc/nginx/conf.d/ssl.conf
