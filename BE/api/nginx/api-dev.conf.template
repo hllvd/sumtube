@@ -4,7 +4,7 @@ server {
 
     # Serve /.well-known/acme-challenge for Let's Encrypt
     location /.well-known/acme-challenge/ {
-        alias /app/static/;
+        root /app/static/;
         try_files $uri $uri/ =404;
     }
 
