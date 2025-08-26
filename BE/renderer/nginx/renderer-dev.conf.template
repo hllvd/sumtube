@@ -2,6 +2,10 @@ server {
     listen 80;
     ${SERVER_NAME_BLOCK}
 
+    location /static/ {
+        alias /app/static/;
+        try_files $uri $uri/ =404;
+    }
     location /.well-known/acme-challenge/ {
         root /app/static;
         try_files $uri =404;
