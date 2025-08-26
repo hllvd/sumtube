@@ -1,6 +1,6 @@
 server {
     listen 443 ssl;
-    server_name $DOMAIN $API_SUBDOMAIN;
+    server_name $API_SUBDOMAIN;
 
     ssl_certificate     /etc/letsencrypt/live/$API_SUBDOMAIN/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/$API_SUBDOMAIN/privkey.pem;

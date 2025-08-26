@@ -3,7 +3,7 @@ server {
     ${SERVER_NAME_BLOCK}
 
     location /.well-known/acme-challenge/ {
-        root /app/static/;
+        root /app/static;
         try_files $uri =404;
     }
 
