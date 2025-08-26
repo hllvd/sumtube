@@ -59,7 +59,9 @@ services:
       - ./api/nginx/api-dev.conf.template:/etc/nginx/conf.d/api-dev.conf.template
       - ./api/nginx/api-prod.conf.template:/etc/nginx/conf.d/api-prod.conf.template
       - ./api/nginx/ssl.conf.template:/etc/nginx/conf.d/ssl.conf.template
-      - ./renderer/nginx/renderer.conf.template:/etc/nginx/conf.d/renderer.conf.template
+      - ./renderer/nginx/renderer-dev.conf.template:/etc/nginx/conf.d/renderer-dev.conf.template
+      - ./renderer/nginx/renderer-prod.conf.template:/etc/nginx/conf.d/renderer-prod.conf.template
+      - ./renderer/nginx/renderer-ssl.conf.template:/etc/nginx/conf.d/renderer-ssl.conf.template
       - ./youtube-transcript-py/nginx/transcript-py.conf.template:/etc/nginx/conf.d/transcript-py.conf.template
       - ./youtube-metadata/nginx/youtube-metadata.conf.template:/etc/nginx/conf.d/youtube-metadata.conf.template
       - ./nginx/docker-entrypoint.sh:/docker-entrypoint.sh
