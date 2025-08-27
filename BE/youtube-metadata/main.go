@@ -72,9 +72,6 @@ func metadataHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	
-
-
 
 	switch method {
 		case "downsub":
@@ -84,7 +81,7 @@ func metadataHandler(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, fmt.Sprintf("Error fetching metadata: %v", err), http.StatusInternalServerError)
 				return
 			}
-			
+			println("📤 downsub response CAT", downSubReturn.Data.Metadata.Category)
 			info = convertDownSubResponseToFlatResponse(downSubReturn)
 			//fmt.Printf("📤 Final response: %+v\n", info)
 			//http.Error(w, "downsub not implemented", http.StatusNotImplemented)
