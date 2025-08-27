@@ -94,8 +94,8 @@ if [ "$HTTPS_ENABLE" = "true" ]; then
    
     # envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/ssl.conf.template > /etc/nginx/conf.d/ssl.conf
   else 
-    echo "Loading[$API_SUBDOMAIN]:/etc/nginx/conf.d/api-prod.conf.template"
-    generate_nginx_conf /etc/nginx/conf.d/api-prod.conf.template /etc/nginx/conf.d/api-prod.conf
+    #echo "Loading[$API_SUBDOMAIN]:/etc/nginx/conf.d/api-prod.conf.template"
+    #generate_nginx_conf /etc/nginx/conf.d/api-prod.conf.template /etc/nginx/conf.d/api-prod.conf
     # envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/api-prod.conf.template > /etc/nginx/conf.d/api-prod.conf
   fi
 
