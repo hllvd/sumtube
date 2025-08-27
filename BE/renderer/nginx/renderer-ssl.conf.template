@@ -5,6 +5,17 @@ server {
     ssl_certificate     /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
 
+
+    location /.well-known/acme-challenge/ {
+        root /app/static;
+        try_files $uri =404;
+    }
+
+    location /static/ {
+        alias /app/static/;
+        try_files $uri $uri/ =404;
+    }
+
     location / {
         proxy_pass http://${RENDERER_SERVER_HOST}:${RENDERER_SERVER_PORT};
         proxy_set_header Host $host;
