@@ -2,14 +2,13 @@ server {
     listen 443 ssl;
     server_name $API_SUBDOMAIN;
 
+    ssl_certificate     /etc/letsencrypt/live/$API_SUBDOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$API_SUBDOMAIN/privkey.pem;
+
     location /.well-known/acme-challenge/ {
         root /app/static;
         try_files $uri =404;
     }
-
-
-    ssl_certificate     /etc/letsencrypt/live/$API_SUBDOMAIN/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/$API_SUBDOMAIN/privkey.pem;
 
     location / {
         proxy_pass http://${GO_SERVER_HOST}:${GO_SERVER_PORT};
