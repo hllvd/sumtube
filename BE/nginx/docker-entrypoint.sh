@@ -77,9 +77,6 @@ if [ "$HTTPS_ENABLE" = "true" ]; then
   
   # Handle main domain
   if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
-    echo "Loading[$API_SUBDOMAIN]:/etc/nginx/conf.d/ssl.conf.template"
-    generate_nginx_conf /etc/nginx/conf.d/ssl.conf.template /etc/nginx/conf.d/ssl.conf
-
     echo "Loading[$DOMAIN]:/etc/nginx/conf.d/renderer-ssl.conf.template"
     generate_nginx_conf /etc/nginx/conf.d/renderer-ssl.conf.template /etc/nginx/conf.d/renderer-ssl.conf
     # envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/renderer-ssl.conf.template > /etc/nginx/conf.d/renderer-ssl.conf
@@ -90,12 +87,13 @@ if [ "$HTTPS_ENABLE" = "true" ]; then
   fi
 
   # Handle api domain
-  if [ -f "/etc/letsencrypt/live/$API_SUBDOMAIN/fullchain.pem" ]; then
-   
+  if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+    echo "Loading[$DOMAIN]:/etc/nginx/conf.d/ssl.conf.template"
+    generate_nginx_conf /etc/nginx/conf.d/ssl.conf.template /etc/nginx/conf.d/ssl.conf
     # envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/ssl.conf.template > /etc/nginx/conf.d/ssl.conf
   else 
-    #echo "Loading[$API_SUBDOMAIN]:/etc/nginx/conf.d/api-prod.conf.template"
-    #generate_nginx_conf /etc/nginx/conf.d/api-prod.conf.template /etc/nginx/conf.d/api-prod.conf
+    echo "Loading[$DOMAIN]:/etc/nginx/conf.d/api-prod.conf.template"
+    generate_nginx_conf /etc/nginx/conf.d/api-prod.conf.template /etc/nginx/conf.d/api-prod.conf
     # envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/api-prod.conf.template > /etc/nginx/conf.d/api-prod.conf
   fi
 
