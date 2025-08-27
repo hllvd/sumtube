@@ -77,28 +77,28 @@ if [ "$HTTPS_ENABLE" = "true" ]; then
   
   # Handle main domain
   if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
-    echo "Loading ssl config with redirections for $DOMAIN"
+    echo "Loading[$DOMAIN]:/etc/nginx/conf.d/renderer-ssl.conf.template"
     generate_nginx_conf /etc/nginx/conf.d/renderer-ssl.conf.template /etc/nginx/conf.d/renderer-ssl.conf
     # envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/renderer-ssl.conf.template > /etc/nginx/conf.d/renderer-ssl.conf
   else 
-    echo "Loading prod config - without redirection - for $DOMAIN"
+    echo "Loading[$DOMAIN]:/etc/nginx/conf.d/renderer-prod.conf.template"
     generate_nginx_conf /etc/nginx/conf.d/renderer-prod.conf.template /etc/nginx/conf.d/renderer-prod.conf
     #envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/renderer-prod.conf.template > /etc/nginx/conf.d/renderer-prod.conf
   fi
 
   # Handle api domain
-  if [ -f "/etc/letsencrypt/live/$API_SUBDOMAIN/fullchain.pem" ]; then
-    echo "Loading ssl config with redirections for $API_SUBDOMAIN"
+  if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+    echo "Loading[$API_SUBDOMAIN]:/etc/nginx/conf.d/ssl.conf.template"
     generate_nginx_conf /etc/nginx/conf.d/ssl.conf.template /etc/nginx/conf.d/ssl.conf
     # envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/ssl.conf.template > /etc/nginx/conf.d/ssl.conf
   else 
-    echo "Loading prod config - without redirection - for $DOMAIN and $API_SUBDOMAIN"
+    echo "Loading[$API_SUBDOMAIN]:/etc/nginx/conf.d/api-prod.conf.template"
     generate_nginx_conf /etc/nginx/conf.d/api-prod.conf.template /etc/nginx/conf.d/api-prod.conf
     # envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/api-prod.conf.template > /etc/nginx/conf.d/api-prod.conf
   fi
 
 else
-  echo "Loading devconfig"
+  echo "Loading devconfig /etc/nginx/conf.d/api-dev.conf.template and /etc/nginx/conf.d/renderer-dev.conf.template"
   generate_nginx_conf /etc/nginx/conf.d/api-dev.conf.template /etc/nginx/conf.d/api-dev.conf
   #envsubst '${GO_SERVER_HOST} ${GO_SERVER_PORT} ${SERVER_NAME_BLOCK}' < /etc/nginx/conf.d/api-dev.conf.template > /etc/nginx/conf.d/api-dev.conf
   generate_nginx_conf /etc/nginx/conf.d/renderer-dev.conf.template /etc/nginx/conf.d/renderer-dev.conf
