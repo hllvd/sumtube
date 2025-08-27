@@ -12,7 +12,7 @@ echo "METADATA_SERVER_PORT=$METADATA_SERVER_PORT"
 echo "ENV=$ENV"
 echo "DOMAIN=$DOMAIN"
 echo "API_SUBDOMAIN=$API_SUBDOMAIN"
-echo "ENABLE_HTTPS=$ENABLE_HTTPS"
+echo "HTTPS_ENABLE=$HTTPS_ENABLE"
 
 # Use server_name only in production
 if [ "$ENV" = "production" ]; then
@@ -41,7 +41,7 @@ generate_nginx_conf() {
             ${RENDERER_SERVER_HOST} ${RENDERER_SERVER_PORT} \
             ${TRANSCRIPT_PY_SERVER_HOST} ${TRANSCRIPT_PY_SERVER_PORT} \
             ${METADATA_SERVER_HOST} ${METADATA_SERVER_PORT} \
-            ${ENV} ${DOMAIN} ${API_SUBDOMAIN} ${ENABLE_HTTPS} ${SERVER_NAME_BLOCK}' \
+            ${ENV} ${DOMAIN} ${API_SUBDOMAIN} ${HTTPS_ENABLE} ${SERVER_NAME_BLOCK}' \
     < "$template" > "$output"
 
   echo "Config generated: $output"
@@ -72,8 +72,8 @@ fi
 
 # Generate final configs
 
-if [ "$ENABLE_HTTPS" = "true" ]; then
-  echo "ENABLE_HTTPS is on"
+if [ "$HTTPS_ENABLE" = "true" ]; then
+  echo "HTTPS_ENABLE is on"
   
   # Handle main domain
   if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
