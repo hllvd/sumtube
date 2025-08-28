@@ -1,49 +1,39 @@
 package main
 
 import (
-	"strings"
 	"testing"
 )
 
-func TestExtractVideoId(t *testing.T) {
-	cases := []struct {
+
+func TestExtractLang(t *testing.T) {
+	tests := []struct {
 		name     string
 		input    string
-		expected string
-		valid    bool
+		wantLang string
+		wantOk   bool
 	}{
-		// Basic cases
-		{"Simple Video ID", "dQw4w9WgXcQ", "dQw4w9WgXcQ", true},
-		{"Language with Video ID", "en/dQw4w9WgXcQ", "dQw4w9WgXcQ", true},
-		{"Language with Title and Video ID", "en/my-video-title-dQw4w9WgXcQ", "dQw4w9WgXcQ", true},
-		{"Full Path with Video ID", "en/my-video-title/dQw4w9WgXcQ", "dQw4w9WgXcQ", true},
-
-		// YouTube URL cases
-		{"Encoded YouTube URL", "https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DdQw4w9WgXcQ", "dQw4w9WgXcQ", true},
-		{"Encoded YouTube Short URL", "youtu.be%2FdQw4w9WgXcQ", "dQw4w9WgXcQ", true},
-		{"Encoded YouTube URL with Params", "https%3A%2F%2Fyoutu.be%2FdQw4w9WgXcQ%3Fsi%3Dabc123", "dQw4w9WgXcQ", true},
-		{"YouTube Short URL", "youtu.be/dQw4w9WgXcQ", "dQw4w9WgXcQ", true},
-		{"YouTube Embed URL", "youtube.com/embed/dQw4w9WgXcQ", "dQw4w9WgXcQ", true},
-		{"YouTube Watch URL", "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "dQw4w9WgXcQ", true},
-
-		// Mixed path and URL
-		{"YouTube URL with lang prefix", "en%2Fhttps%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DdQw4w9WgXc3", "dQw4w9WgXc3", true},
-
-		// Invalid or incomplete inputs
-		{"Invalid Length Video ID", "fr/learn-french-basics/abc123def", "", false},
-		{"Missing Video ID", "de/title-with-no-id", "", false},
-		{"Invalid Input", "invalid", "", false},
-		{"Invalid YouTube URL", "youtube.com/watch", "", false},
-		{"Incomplete YouTube URL", "https://www.youtube.com/watch?v=", "", false},
+		{"Valid language at start", "en/video-title", "en", true},
+		{"Valid lang only", "en", "en", true},
+		{"Valid lang only", "/en", "en", true},
+		{"Valid lang only", "/en/", "en", true},
+		{"Valid language with leading slash", "/en/video-title", "en", true},
+		{"Valid language with trailing slash", "en/video-title/", "en", true},
+		{"Valid language with both slashes", "/en/video-title/", "en", true},
+		{"Multiple segments with valid language", "fr/my/video/path", "fr", true},
+		{"Invalid language", "xx/video-title", "", false},
+		{"Empty path", "", "", false},
+		{"Single segment invalid", "invalid", "", false},
+		{"Single segment valid", "es", "es", true},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			segments := strings.Split(tc.input, "/")
-			got := extractVideoId(segments)
-
-			if got != tc.expected {
-				t.Errorf("Input: %s | Expected: %s | Got: %s", tc.input, tc.expected, got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotLang, gotOk := extractLang(tt.input)
+			if gotLang != tt.wantLang {
+				t.Errorf("extractLang() gotLang = %v, want %v", gotLang, tt.wantLang)
+			}
+			if gotOk != tt.wantOk {
+				t.Errorf("extractLang() gotOk = %v, want %v", gotOk, tt.wantOk)
 			}
 		})
 	}

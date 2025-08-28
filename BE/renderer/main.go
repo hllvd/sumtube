@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/gomarkdown/markdown"
@@ -51,49 +52,35 @@ func extractLang(path string) (string, bool) {
 	return "",false
 }
 
+
+
 func langHandle(w http.ResponseWriter, r *http.Request) string {
-    println("langHandle path", r.URL.Path)
-	// 1. Highest priority: Check URL path (domain.com/{lang})
-	lang, isOnPath := extractLang(r.URL.Path)
-	if isOnPath {
-		// Set language cookie
-        cookie := &http.Cookie{
-            Name:     "language",
-            Value:    lang,
-            Path:     "/",
-            MaxAge:   86400 * 365, // 1 year
-            Secure:   true,        // Only send over HTTPS
-            HttpOnly: true,        // Prevent JavaScript access
-            SameSite: http.SameSiteStrictMode,
-        }
-        http.SetCookie(w, cookie)
-        println("langHandle isOnPath", lang)
+	println("langHandle path", r.URL.Path)
+
+	// 1. Highest priority: URL path (domain.com/{lang})
+	if lang, isOnPath := extractLang(r.URL.Path); isOnPath && allowedLanguages[lang] {
+		setLanguageCookie(w, lang)
+		println("langHandle isOnPath", lang)
 		return lang
 	}
 
-
-	// 2. Check language cookie
+	// 2. Cookie
 	if cookie, err := r.Cookie("language"); err == nil {
-        println("langHandle 2", lang)
+		println("langHandle 2", cookie.Value)
 		if allowedLanguages[cookie.Value] {
-            println("langHandle 2 isAllowed", cookie.Value)
+			println("langHandle 2 isAllowed", cookie.Value)
 			return cookie.Value
 		}
 	}
 
-	// 3. Check browser Accept-Language header
-	acceptLang := getBrowserLang(r)
-
-    println("getBrowserLang acceptLang", acceptLang)
-	if acceptLang != "" {
-        println("Browser 1", acceptLang)
-		// Parse the first language in the header (e.g., "en-US,en;q=0.9" -> "en")
-		if lang := strings.Split(acceptLang, ",")[0]; lang != "" {
-			// Extract base language code (en-US -> en)
-            println("Browser 2", acceptLang)
+	// 3. Accept-Language header
+	if acceptLang := getBrowserLang(r); acceptLang != "" {
+		println("getBrowserLang acceptLang", acceptLang)
+		lang := strings.TrimSpace(strings.Split(acceptLang, ",")[0])
+		if lang != "" {
 			baseLang := strings.Split(lang, "-")[0]
 			if allowedLanguages[baseLang] {
-                println("Browser 3", baseLang)
+				println("Browser selected", baseLang)
 				return baseLang
 			}
 		}
@@ -101,6 +88,20 @@ func langHandle(w http.ResponseWriter, r *http.Request) string {
 
 	// 4. Default to English
 	return "en"
+}
+
+// helper to set language cookie
+func setLanguageCookie(w http.ResponseWriter, lang string) {
+    println("setLanguageCookie : ", lang)
+	cookie := &http.Cookie{
+		Name:     "language",
+		Value:    lang,
+		Path:     "/",
+		MaxAge:   86400 * 365,
+		Expires:  time.Now().Add(365 * 24 * time.Hour),
+		SameSite: http.SameSiteStrictMode,
+	}
+	http.SetCookie(w, cookie)
 }
 
 func getBrowserLang(r *http.Request) string {
@@ -473,7 +474,10 @@ func GetRouteType(segments []string) RouteType {
 // Router function to delegate requests to the appropriate controller
 func router(w http.ResponseWriter, r *http.Request) {
     pathWithParam := strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "https://"), "http://")
-    println("pathWithParam",pathWithParam)
+    println("pathWithParam =>",pathWithParam)
+    println("r.URL.Path ", r.URL.Path)
+   // lang, _ := extractLang("en")
+
     if r.URL.RawQuery != "" {
         pathWithParam += "?" + r.URL.RawQuery
     }
