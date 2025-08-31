@@ -93,12 +93,16 @@ func TestProcessor_Add(t *testing.T) {
 	vid := "abc123"
 	lang := "en"
 
+	title := map[string]string{
+		lang: "Initial Title",
+	}
+
 	// 1. Adiciona um novo vídeo
 	video1 := ProcessingVideo{
 		VideoID:  vid,
 		Language: lang,
 		Metadata:  Metadata{
-			Title: "Initial Title",
+			Title: title,
 		},
 	}
 	p.Add(video1)
@@ -108,7 +112,7 @@ func TestProcessor_Add(t *testing.T) {
 	if meta == nil {
 		t.Fatal("Expected metadata, got nil")
 	}
-	if meta.Title != "Initial Title" {
+	if meta.Title[lang] != "Initial Title" {
 		t.Errorf("Expected title to be 'Initial Title', got '%s'", meta.Title)
 	}
 
@@ -117,12 +121,15 @@ func TestProcessor_Add(t *testing.T) {
 		t.Errorf("Expected status to be '%s', got '%s'", StatusPending, status)
 	}
 
+	summary := map[string]string{
+		lang: "Updated content",
+	}
 	// 2. Atualiza somente o campo `Content`
 	video2 := ProcessingVideo{
 		VideoID:  vid,
 		Language: lang,
 		Metadata:  Metadata{
-			Summary: "Updated content",
+			Summary: summary,
 		},
 	}
 	p.Add(video2)
@@ -132,11 +139,11 @@ func TestProcessor_Add(t *testing.T) {
 		t.Fatal("Expected metadata after update, got nil")
 	}
 
-	if meta.Title != "Initial Title" {
+	if meta.Title[lang] != "Initial Title" {
 		t.Errorf("Expected title to remain 'Initial Title', got '%s'", meta.Title)
 	}
 
-	if meta.Summary != "Updated content" {
+	if meta.Summary[lang] != "Updated content" {
 		t.Errorf("Expected content to be 'Updated content', got '%s'", meta.Summary)
 	}
 }
@@ -144,10 +151,22 @@ func TestProcessor_Add(t *testing.T) {
 func TestProcessor_Add_MultipleVideos(t *testing.T) {
 	p := NewProcessor()
 
+	title1 := map[string]string{
+		"en": "Title 1",
+	}
+
+	title2 := map[string]string{
+		"pt": "Título 2",
+	}
+
+	title3 := map[string]string{
+		"en": "Title 3",
+	}
+
 	videos := []ProcessingVideo{
-		{VideoID: "vid1", Language: "en", Metadata: Metadata{Title: "Title 1"}},
-		{VideoID: "vid2", Language: "pt", Metadata: Metadata{Title: "Título 2"}},
-		{VideoID: "vid3", Language: "en", Metadata: Metadata{Title: "Title 3"}},
+		{VideoID: "vid1", Language: "en", Metadata: Metadata{Title: title1}},
+		{VideoID: "vid2", Language: "pt", Metadata: Metadata{Title: title2}},
+		{VideoID: "vid3", Language: "en", Metadata: Metadata{Title: title3}},
 	}
 
 	// Adiciona vários vídeos
@@ -161,7 +180,7 @@ func TestProcessor_Add_MultipleVideos(t *testing.T) {
 
 	// Confere título do segundo vídeo
 	meta := p.GetVideoMeta("vid2", "pt")
-	if meta == nil || meta.Title != "Título 2" {
+	if meta == nil || meta.Title["pt"] != title2["pt"]{
 		t.Errorf("Expected 'Título 2', got '%v'", meta)
 	}
 }
@@ -171,28 +190,37 @@ func TestProcessor_Add_UpdateMultipleFields(t *testing.T) {
 
 	vid := "vidX"
 	lang := "en"
+	title :=  map[string]string{
+		lang: "Original Title",
+	}
+	summary := map[string]string{
+		lang: "Original content",
+	}
 
 	video := ProcessingVideo{
 		VideoID:  vid,
 		Language: lang,
-		Metadata: Metadata{Title: "Original Title", Summary: "Original content"},
+		Metadata: Metadata{Title: title, Summary: summary},
 		Status:   StatusPending,
 	}
 	p.Add(video)
+
+	title[lang] = "Updated Title"
+	summary[lang] = "Updated content"
 
 	// Atualiza Title, Content, Status, CapsDownloadUrl e Expires
 	newExpire := time.Now().Add(30 * time.Second)
 	update := ProcessingVideo{
 		VideoID:         vid,
 		Language:        lang,
-		Metadata:        Metadata{Title: "Updated Title", Summary: "Updated content"},
+		Metadata:        Metadata{Title: title, Summary: summary},
 		Status:          StatusMetadataProcessed,
 		Expires:         newExpire,
 	}
 	p.Add(update)
 
 	meta := p.GetVideoMeta(vid, lang)
-	if meta.Title != "Updated Title" || meta.Summary != "Updated content" {
+	if meta.Title[lang] != "Updated Title" || meta.Summary[lang] != "Updated content" {
 		t.Errorf("Expected metadata updated, got Title='%s' Content='%s'", meta.Title, meta.Summary)
 	}
 
