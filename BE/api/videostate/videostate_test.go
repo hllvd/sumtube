@@ -263,3 +263,92 @@ func TestCleanupRemovesExpired(t *testing.T) {
 		t.Errorf("Expected expired video to be cleaned up")
 	}
 }
+
+func TestProcessor_DecreaseTTLMetadata(t *testing.T) {
+	processor := NewProcessor()
+	videoID := "test-video"
+	language := "en"
+	initialTTL := 5
+
+	// Add test video with initial TTL
+	processor.Add(ProcessingVideo{
+		VideoID:     videoID,
+		Language:    language,
+		TTLMetadata: initialTTL,
+	})
+
+	// Decrease TTL
+	processor.DecreaseTTLMetadata(videoID, language)
+
+	// Verify TTL decreased by 1
+	ttl := processor.GetTTLMetadata(videoID, language)
+	if ttl != initialTTL-1 {
+		t.Errorf("Expected TTL %d, got %d", initialTTL-1, ttl)
+	}
+
+	// Test with non-existent video
+	processor.DecreaseTTLMetadata("non-existent", language)
+	// Should not panic or error
+}
+
+func TestProcessor_GetTTLMetadata(t *testing.T) {
+	processor := NewProcessor()
+	videoID := "test-video"
+	language := "en"
+	expectedTTL := 3
+
+	// Test with non-existent video
+	ttl := processor.GetTTLMetadata("non-existent", language)
+	if ttl != 0 {
+		t.Errorf("Expected 0 for non-existent video, got %d", ttl)
+	}
+
+	// Add test video
+	processor.Add(ProcessingVideo{
+		VideoID:     videoID,
+		Language:    language,
+		TTLMetadata: expectedTTL,
+	})
+
+	// Verify correct TTL returned
+	ttl = processor.GetTTLMetadata(videoID, language)
+	if ttl != expectedTTL {
+		t.Errorf("Expected TTL %d, got %d", expectedTTL, ttl)
+	}
+
+	// Test with different language
+	ttl = processor.GetTTLMetadata(videoID, "es")
+	if ttl != 0 {
+		t.Errorf("Expected 0 for different language, got %d", ttl)
+	}
+}
+
+func TestProcessor_DecreaseTTLMetadata_MultipleDecreases(t *testing.T) {
+	processor := NewProcessor()
+	videoID := "test-video"
+	language := "en"
+	initialTTL := 3
+
+	processor.Add(ProcessingVideo{
+		VideoID:     videoID,
+		Language:    language,
+		TTLMetadata: initialTTL,
+	})
+
+	// Decrease multiple times
+	processor.DecreaseTTLMetadata(videoID, language)
+	processor.DecreaseTTLMetadata(videoID, language)
+	processor.DecreaseTTLMetadata(videoID, language)
+
+	ttl := processor.GetTTLMetadata(videoID, language)
+	if ttl != 0 {
+		t.Errorf("Expected TTL 0 after 3 decreases, got %d", ttl)
+	}
+
+	// Decrease below zero
+	processor.DecreaseTTLMetadata(videoID, language)
+	ttl = processor.GetTTLMetadata(videoID, language)
+	if ttl != -1 {
+		t.Errorf("Expected TTL -1, got %d", ttl)
+	}
+}
