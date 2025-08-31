@@ -34,6 +34,7 @@ type ProcessingVideo struct {
 	Expires          time.Time
 	Status           VideoStatus
 	Metadata		 Metadata
+	TTLMetadata		 int
 }
 
 const (
@@ -42,6 +43,7 @@ const (
 	StatusDownloadProcessed    VideoStatus = "download-processed"
 	StatusDownloadAWSProcessed VideoStatus = "download-aws-processed"
 	StatusSummarizeProcessed   VideoStatus = "completed"
+	StatusMetadataTTlExceeded  VideoStatus = "error-metadata-ttl-exceeded" 
 )
 
 
@@ -177,6 +179,44 @@ func (p *Processor) Add(newVideo ProcessingVideo) {
     p.videos = append(p.videos, newVideo)
 }
 
+
+func (p *Processor) DecreaseTTLMetadata(videoID string, language string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for i, v := range p.videos {
+		if v.VideoID == videoID && v.Language == language {
+			p.videos[i].TTLMetadata = p.videos[i].TTLMetadata - 1
+			return
+		}
+	}
+	return
+}
+
+func (p *Processor) GetTTLMetadata(videoID string, language string) int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for _, v := range p.videos {
+		if v.VideoID == videoID && v.Language == language {
+			return v.TTLMetadata
+		}
+	}
+	return 0
+}
+
+func (p *Processor) SetTTLMetadata(videoID string, language string, ttl int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for i, v := range p.videos {
+		if v.VideoID == videoID && v.Language == language {
+			p.videos[i].TTLMetadata = ttl
+			return
+		}
+	}
+	return
+}
 
 
 func (p *Processor) GetStatus(videoID string, language string) VideoStatus {
