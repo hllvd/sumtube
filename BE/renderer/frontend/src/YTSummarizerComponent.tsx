@@ -87,6 +87,11 @@ function YTSummarizerComponent() {
             setIsLoading(false)
           }, 5000)
           break
+        case "error-metadata-ttl-exceeded":
+          setVideoError({
+            errorMessage: "⚠️ Error detected, please try it later",
+          })
+          break
         default:
           console.error("Unexpected status:", data.status)
           setIsLoading(false)
