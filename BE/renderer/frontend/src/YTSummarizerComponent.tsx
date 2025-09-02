@@ -76,7 +76,7 @@ function YTSummarizerComponent() {
           setTimeout(() => fetchSummary(apiUrl, videoId, language), 3000)
           break
         case "completed":
-          window.location.href = `${window.location.origin}/${data.lang}/${data.videoId}/${data.path}`
+          window.location.href = `${window.location.origin}/${language}/${data.videoId}/${data.path}`
           break
         case "caps_not_found":
           setVideoError({
