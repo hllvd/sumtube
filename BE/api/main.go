@@ -943,7 +943,7 @@ func loadContentWhenItsCached(videoID string, lang string) (videostate.Metadata,
 }
 
 func processingVideoQueue(videoId string, language string) {
-	ttl := 2
+	ttl := 3
 	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoId)
 	var metadataDynamoResponse *HandleSummaryRequestResponse
 	var fetchMetadataResponse *VideoMetadata
