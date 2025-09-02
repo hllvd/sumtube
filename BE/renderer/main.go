@@ -499,7 +499,7 @@ func router(w http.ResponseWriter, r *http.Request) {
     title := extractTitle(pathSegments)
     videoId := extractVideoId(pathSegments)
 
-	langHandled := langHandle(w, r)
+	lang = langHandle(w, r)
 
     switch routeType {
         case BLOG_TEMPLATE:
@@ -508,7 +508,7 @@ func router(w http.ResponseWriter, r *http.Request) {
         
         case REDIRECT_BLOG_RETURN_HOME:
             println("case REDIRECT_BLOG_RETURN_HOME")
-            result, _ := GetVideoContent(videoId, langHandled)
+            result, _ := GetVideoContent(videoId, lang)
             // Go do Blog
             if err == nil {
                 if status, ok := result["status"].(string); ok {
@@ -516,7 +516,7 @@ func router(w http.ResponseWriter, r *http.Request) {
                     println("status: ", status)
                     if (status == "completed"){
                         path := result["path"].(string)
-                        newPath := fmt.Sprintf("/%s/%s/%s", langHandled, videoId, path)
+                        newPath := fmt.Sprintf("/%s/%s/%s", lang, videoId, path)
                         redirectURL := &url.URL{
                             Path:     newPath,
                             RawQuery: r.URL.RawQuery,
@@ -533,7 +533,7 @@ func router(w http.ResponseWriter, r *http.Request) {
             }
             
             // Go to Home
-            newPath := fmt.Sprintf("/%s/%s", langHandled, videoId)
+            newPath := fmt.Sprintf("/%s/%s", lang, videoId)
             redirectURL := &url.URL{
                 Path:     newPath,
                 RawQuery: r.URL.RawQuery,
@@ -541,7 +541,7 @@ func router(w http.ResponseWriter, r *http.Request) {
             http.Redirect(w, r, redirectURL.String(), http.StatusMovedPermanently)
         case REDIRECT_HOME:
             println("case REDIRECT_HOME")
-            newPath := fmt.Sprintf("/%s", langHandled)
+            newPath := fmt.Sprintf("/%s", lang)
             redirectURL := &url.URL{
                 Path:     newPath,
             }
