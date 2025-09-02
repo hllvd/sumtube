@@ -373,7 +373,9 @@ func pushMetadataToDynamoDB(data videostate.Metadata) error {
     dateTimeNow := time.Now().Format("2006-01-02 15:04")
 
     // Build maps for multilingual fields
-
+	if data.Vid == "" {
+		return fmt.Errorf("Vid not found")
+	}
 
     item := map[string]dynamodbtypes.AttributeValue{
         "PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("VIDEO#%s", data.Vid)},
@@ -872,6 +874,25 @@ func isThisStatusProcessing(currentStatus string) bool {
 	return false	
 }
 
+func isMoreThanThreeMinutesOld(uploadDateTime string) (bool, error) {
+    // Try parsing as Unix timestamp first
+    uploadTime, err := strconv.ParseInt(uploadDateTime, 10, 64)
+    if err == nil {
+        // Successfully parsed as Unix timestamp
+        articleTime := time.Unix(uploadTime, 0)
+        return time.Now().Sub(articleTime) > 3*time.Minute, nil
+    }
+
+    // If not Unix timestamp, try parsing as RFC3339
+    articleTime, err := time.Parse(time.RFC3339, uploadDateTime)
+    if err != nil {
+        return false, fmt.Errorf("failed to parse datetime: %v", err)
+    }
+
+    return time.Now().Sub(articleTime) > 3*time.Minute, nil
+}
+
+
 func loadContentWhenItsCached(videoID string, lang string) (videostate.Metadata, error) {
 	metadata := videostate.Metadata{}
 	type ContentData struct {
@@ -922,7 +943,7 @@ func loadContentWhenItsCached(videoID string, lang string) (videostate.Metadata,
 }
 
 func processingVideoQueue(videoId string, language string) {
-	ttl := 5
+	ttl := 2
 	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoId)
 	var metadataDynamoResponse *HandleSummaryRequestResponse
 	var fetchMetadataResponse *VideoMetadata
@@ -930,16 +951,57 @@ func processingVideoQueue(videoId string, language string) {
 		VideoID: videoId,
 		Language: language,
 	}
+
+	videoQueue.SetTTLMetadata(videoId, language, ttl)
 	
-	for videoQueue.Exists(videoId, language) && ttl > 0{
+	for videoQueue.Exists(videoId, language){
 		if (videoQueue.GetStatus(videoId, language) == videostate.StatusSummarizeProcessed) {
 			println("COMPLETED")
 			break
 		}
+
+		//Error Handler
+		if strings.Contains(strings.ToLower(string(videoQueue.GetStatus(videoId, language))), "error") {
+			var metadata = videoQueue.GetVideoMeta(videoId, language)
+			// metadata.ArticleUploadDateTime is string. Convert it to time Time
+			
+			isOld, err := isMoreThanThreeMinutesOld(metadata.ArticleUploadDateTime)
+			if err != nil {
+			    // Handle error
+			    log.Printf("Error checking article time: %v", err)
+			}
+			
+			if !isOld {
+				log.Printf("Video %s should wait for 3 minutes before resuming.", videoId)
+				break
+			}
+
+			println("ArticleUploadDateTime : ", metadata.ArticleUploadDateTime)
+			videoQueue.SetStatus(videoId, language, videostate.StatusPending)
+			continue;
+		}
 		println("[1] Video Status : ", videoQueue.GetStatus(videoId, language))
 		
+		//Metadata Handler
 		println(">>>>>>>>>>> BEFORE Fetch metadata")
 		if (videoQueue.GetStatus(videoId, language) == videostate.StatusPending){
+			videoQueue.DecreaseTTLMetadata(videoId, language)
+			
+			ttlMetadata := videoQueue.GetTTLMetadata(videoId, language)
+			println("GET METADATA TTL", ttlMetadata)
+			if (ttlMetadata < 1) {
+				videoQueue.SetStatus(videoId, language, videostate.StatusMetadataTTlExceeded)
+
+				go func(){
+					var metadata = videoQueue.GetVideoMeta(videoId, language)
+					if err := pushMetadataToDynamoDB(*metadata); err != nil {
+						log.Printf("❌ Failed to push metadata to DynamoDB: %v", err)
+					}else{
+						log.Printf("Push error data from %s to DynamoDB", videoId)
+					}
+				}()
+				break
+			}
 			
 			// Fetch Metadata
 			log.Println("⏳ => Fetching Metadata ", videoId)
@@ -954,6 +1016,7 @@ func processingVideoQueue(videoId string, language string) {
 
 			if fetchMetadataResponse.Category == "" {
 				log.Printf("❌ [0] No category found for video %s", videoId)
+				time.Sleep(1 * time.Second)
 				continue
 			}
 			log.Println("before convertHandleSummary")
@@ -985,6 +1048,7 @@ func processingVideoQueue(videoId string, language string) {
 				var metadata = videoQueue.GetVideoMeta(videoId, language)
 				if metadata.Category == "" {
 					log.Printf("❌ [2] No category found for video %s", videoId)
+					time.Sleep(1 * time.Second)
 				}else{
 					println("🔄 [2] printing category : ", videoMetadata.Category)
 				}
@@ -993,8 +1057,6 @@ func processingVideoQueue(videoId string, language string) {
 					log.Printf("❌ Failed to push metadata to DynamoDB: %v", err)
 				}
 			}()
-
-			
 		}
 		// Check the status
 		println("[1] GET Status: ", videoQueue.GetStatus(videoId, language))
