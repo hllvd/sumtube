@@ -875,22 +875,25 @@ func isThisStatusProcessing(currentStatus string) bool {
 }
 
 func isMoreThanThreeMinutesOld(uploadDateTime string) (bool, error) {
-    // Try parsing as Unix timestamp first
-    uploadTime, err := strconv.ParseInt(uploadDateTime, 10, 64)
-    if err == nil {
-        // Successfully parsed as Unix timestamp
+    // Tenta como timestamp Unix
+    if uploadTime, err := strconv.ParseInt(uploadDateTime, 10, 64); err == nil {
         articleTime := time.Unix(uploadTime, 0)
-        return time.Now().Sub(articleTime) > 3*time.Minute, nil
+        return time.Since(articleTime) > 3*time.Minute, nil
     }
 
-    // If not Unix timestamp, try parsing as RFC3339
-    articleTime, err := time.Parse(time.RFC3339, uploadDateTime)
-    if err != nil {
-        return false, fmt.Errorf("failed to parse datetime: %v", err)
+    // Tenta como RFC3339
+    if articleTime, err := time.Parse(time.RFC3339, uploadDateTime); err == nil {
+        return time.Since(articleTime) > 3*time.Minute, nil
     }
 
-    return time.Now().Sub(articleTime) > 3*time.Minute, nil
+    // Tenta como formato sem timezone
+    if articleTime, err := time.Parse("2006-01-02T15:04:05", uploadDateTime); err == nil {
+        return time.Since(articleTime) > 3*time.Minute, nil
+    }
+
+    return false, fmt.Errorf("failed to parse datetime: %s", uploadDateTime)
 }
+
 
 
 func loadContentWhenItsCached(videoID string, lang string) (videostate.Metadata, error) {
