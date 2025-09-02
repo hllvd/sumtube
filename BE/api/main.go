@@ -994,6 +994,8 @@ func processingVideoQueue(videoId string, language string) {
 
 				go func(){
 					var metadata = videoQueue.GetVideoMeta(videoId, language)
+					metadata.Vid = videoId
+					metadata.Lang = language
 					if err := pushMetadataToDynamoDB(*metadata); err != nil {
 						log.Printf("❌ Failed to push metadata to DynamoDB: %v", err)
 					}else{
