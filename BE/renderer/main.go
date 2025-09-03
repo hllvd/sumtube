@@ -499,7 +499,7 @@ func router(w http.ResponseWriter, r *http.Request) {
     title := extractTitle(pathSegments)
     videoId := extractVideoId(pathSegments)
 
-	lang = langHandle(w, r)
+	// lang = langHandle(w, r)
 
     switch routeType {
         case BLOG_TEMPLATE:
