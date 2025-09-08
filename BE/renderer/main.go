@@ -43,24 +43,31 @@ var allowedLanguages = map[string]bool{
 }
 
 func extractLang(path string) (string, bool) {
-	pathParts := strings.Split(strings.Trim(path, "/"), "/")
-	if len(pathParts) > 0 {
-		if lang := pathParts[0]; allowedLanguages[lang] {
-			return lang,true
-		}
+	trimmed := strings.Trim(path, "/")
+	if trimmed == "" {
+		return "", false
 	}
-	return "",false
+
+	pathParts := strings.Split(trimmed, "/")
+	if len(pathParts) == 0 {
+		return "", false
+	}
+
+	lang := strings.ToLower(pathParts[0])
+	if allowedLanguages[lang] {
+		return lang, true
+	}
+	return "", false
 }
 
 
 
-func langHandle(w http.ResponseWriter, r *http.Request) string {
+func getCurrentLang(w http.ResponseWriter, r *http.Request) string {
 	println("langHandle path", r.URL.Path)
 
 	// 1. Highest priority: URL path (domain.com/{lang})
 	if lang, isOnPath := extractLang(r.URL.Path); isOnPath && allowedLanguages[lang] {
-		setLanguageCookie(w, lang)
-		println("langHandle isOnPath", lang)
+        println("langHandle isOnPath", lang)
 		return lang
 	}
 
@@ -99,7 +106,7 @@ func setLanguageCookie(w http.ResponseWriter, lang string) {
 		Path:     "/",
 		MaxAge:   86400 * 365,
 		Expires:  time.Now().Add(365 * 24 * time.Hour),
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteLaxMode,
 	}
 	http.SetCookie(w, cookie)
 }
@@ -338,47 +345,47 @@ func CountWordsAndReadingTime(text string) (int, int) {
 
 
 // LoadContent handles the HTTP request for video content
-func (c *LoadController) LoadContent(w http.ResponseWriter, r *http.Request) {
-    println("HandleLoad")
-    path := r.URL.Path
+// func (c *LoadController) LoadContent(w http.ResponseWriter, r *http.Request) {
+//     println("HandleLoad")
+//     path := r.URL.Path
     
-    // Extract user's lang
-    language := langHandle(w, r)
+//     // Extract user's lang
+//     language := langHandle(w, r)
 
-    segments, _ := splitURLPath(path)
-    videoID := extractVideoId(segments)
+//     segments, _ := splitURLPath(path)
+//     videoID := extractVideoId(segments)
 
-    println("HandleLoad videoID: ", videoID)
-    println("HandleLoad language: ", language)
+//     println("HandleLoad videoID: ", videoID)
+//     println("HandleLoad language: ", language)
     
-    // Get the content using the new function
-    result, err := GetVideoContent(videoID, language)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
+//     // Get the content using the new function
+//     result, err := GetVideoContent(videoID, language)
+//     if err != nil {
+//         http.Error(w, err.Error(), http.StatusInternalServerError)
+//         return
+//     }
     
-    // Extract properties from the response
-    responseLang := result["lang"].(string)
-    content := result["content"].(string)
-    answer := result["answer"].(string)
-    duration := result["duration"].(int)
+//     // Extract properties from the response
+//     responseLang := result["lang"].(string)
+//     content := result["content"].(string)
+//     answer := result["answer"].(string)
+//     duration := result["duration"].(int)
 
-	htmlContent := ConvertMarkdownToHTML(content)
+// 	htmlContent := ConvertMarkdownToHTML(content)
     
-    // Create structured JSON response
-    response := map[string]interface{}{
-        "videoId": videoID,
-        "lang":    responseLang,
-        "content": htmlContent,
-        "answer":  answer,
-        "duration": duration,
-    }
+//     // Create structured JSON response
+//     response := map[string]interface{}{
+//         "videoId": videoID,
+//         "lang":    responseLang,
+//         "content": htmlContent,
+//         "answer":  answer,
+//         "duration": duration,
+//     }
     
-    // Send JSON response
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(response)
-}
+//     // Send JSON response
+//     w.Header().Set("Content-Type", "application/json")
+//     json.NewEncoder(w).Encode(response)
+// }
 
 func splitURLPath(rawURL string) ([]string, error) {
 	// Ensure it has a scheme so url.Parse works properly
@@ -430,14 +437,14 @@ func GetRouteType(segments []string) RouteType {
 		return s == ""
 	})
 	n := len(segments)
-    println("segments: ", segments)
-    println("segments n: ", n)
+    // println("segments: ", segments)
+    // println("segments n: ", n)
     
     if n == 3 {
         first, second, third := segments[0], segments[1], segments[2]
 		if allowedLanguages[first] {
 			if isVideoID(second) && isLikelyTitle(third) {
-                println("4 isVideoID(second) && isLikelyTitle(third)", isVideoID(second), isLikelyTitle(third))
+                // println("4 isVideoID(second) && isLikelyTitle(third)", isVideoID(second), isLikelyTitle(third))
 				println("return BLOG_TEMPLATE")
                 return BLOG_TEMPLATE
 			}
@@ -447,8 +454,8 @@ func GetRouteType(segments []string) RouteType {
     if n == 2 {
         first, second := segments[0], segments[1]
 		if allowedLanguages[first] && isVideoID(second) {
-            println("3 allowedLanguages[first] && isVideoID(second)", allowedLanguages[first], isVideoID(second))
-            println("return REDIRECT_BLOG_RETURN_HOME")
+           // println("3 allowedLanguages[first] && isVideoID(second)", allowedLanguages[first], isVideoID(second))
+           // println("return REDIRECT_BLOG_RETURN_HOME")
 			return REDIRECT_BLOG_RETURN_HOME
 		}
 	}
@@ -493,17 +500,31 @@ func router(w http.ResponseWriter, r *http.Request) {
     routeType := GetRouteType(pathSegments)
     println("routeType: ", routeType)
 
+    lang, nonLang := extractLang(pathWithParam)
+    if (nonLang == false){
+        if cookie, err := r.Cookie("language"); err == nil {
+            newPath := fmt.Sprintf("/%s/", cookie.Value)
+            println("Redirecting to ",newPath)
+            http.Redirect(w, r, newPath, http.StatusMovedPermanently)
+            
+            return
+        }
+        println("pathWithParam: ", pathWithParam)
+        browserLang := getBrowserLang(r)
+        newPath := fmt.Sprintf("/%s/", browserLang)
+        http.Redirect(w, r, newPath, http.StatusMovedPermanently)
+        return
+    }
     
     // Extract components
-    lang, _ := extractLang(pathWithParam)
+    //ang, _ := extractLang(pathWithParam)
     title := extractTitle(pathSegments)
     videoId := extractVideoId(pathSegments)
-
-	// lang = langHandle(w, r)
 
     switch routeType {
         case BLOG_TEMPLATE:
             println("case BLOG_TEMPLATE")
+            setLanguageCookie(w, lang)
             loadBlog(w, r, lang, title, videoId)
         
         case REDIRECT_BLOG_RETURN_HOME:
@@ -548,6 +569,7 @@ func router(w http.ResponseWriter, r *http.Request) {
             http.Redirect(w, r, redirectURL.String(), http.StatusMovedPermanently)
         case HOME:
             println("case HOME", lang, videoId)
+            setLanguageCookie(w, lang)
             loadIndex(w, r, lang, videoId)
         default:
             http.Error(w, "Invalid route", http.StatusNotFound)
@@ -916,6 +938,6 @@ func main() {
 	http.HandleFunc("/", router)
 
 	// Start the server
-	println("Server is running on http://localhost:8081 test")
+	println("Server is running on http://localhost:8081 renderer server")
 	http.ListenAndServe(":8081", nil)
 }

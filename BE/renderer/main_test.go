@@ -4,8 +4,79 @@ import (
 	"testing"
 )
 
+func TestGetRouteType(t *testing.T) {
+	// Mock allowedLanguages
+
+
+	tests := []struct {
+		name     string
+		segments []string
+		want     RouteType
+	}{
+		{
+			name:     "Home EN",
+			segments: []string{"en"},
+			want:     HOME,
+		},
+		{
+			name:     "Home PT",
+			segments: []string{"pt"},
+			want:     HOME,
+		},
+		{
+			name:     "Empty domain root",
+			segments: []string{},
+			want:     REDIRECT_HOME,
+		},
+		{
+			name:     "Trailing slash PT",
+			segments: []string{"pt", ""},
+			want:     HOME, // should normalize and treat like "pt"
+		},
+		{
+			name:     "Invalid language",
+			segments: []string{"hashodmain", "pt"},
+			want:     REDIRECT_HOME,
+		},
+		{
+			name:     "Invalid language with trailing slash",
+			segments: []string{"hashodmain", "pt", ""},
+			want:     REDIRECT_HOME,
+		},
+		{
+			name:     "Lang + VideoID → Redirect to blog",
+			segments: []string{"en", "abcdefghijk"},
+			want:     REDIRECT_BLOG_RETURN_HOME,
+		},
+		{
+			name:     "Lang + VideoID + Title → Blog template",
+			segments: []string{"en", "abcdefghijk", "my-title"},
+			want:     BLOG_TEMPLATE,
+		},
+		{
+			name:     "VideoID only → Home",
+			segments: []string{"abcdefghijk"},
+			want:     HOME,
+		},
+		{
+			name:     "Garbage route",
+			segments: []string{"foo", "bar"},
+			want:     REDIRECT_HOME,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := GetRouteType(tt.segments)
+			if got != tt.want {
+				t.Errorf("GetRouteType(%v) = %v, want %v", tt.segments, got, tt.want)
+			}
+		})
+	}
+}
 
 func TestExtractLang(t *testing.T) {
+
 	tests := []struct {
 		name     string
 		input    string
