@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -217,7 +218,6 @@ func GetVideosFromCategory(lang string, categoryName string, limit int) ([]map[s
     escapedCategory := url.QueryEscape(categoryName)
     fullURL := fmt.Sprintf("%s?category=%s&lang=%s&limit=%d", baseURL, escapedCategory, lang, limit)
 
-
     resp, err := http.Get(fullURL)
     if err != nil {
         return nil, fmt.Errorf("failed to call API: %v", err)
@@ -243,7 +243,7 @@ func GetVideosFromCategory(lang string, categoryName string, limit int) ([]map[s
     // Extrai somente vid e title
     var videos []map[string]string
     for _, item := range rawItems {
-        vid, _ := item["vid"].(string)
+        vid, _ := item["videoId"].(string)
         title, _ := item["title"].(string)
         path, _ := item["path"].(string)
         lang, _ := item["lang"].(string)
@@ -729,6 +729,7 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
     }
 
     relatedVideos, err := GetVideosFromCategory(lang, result["category"].(string), 10)
+    log.Println("GetVideoFromCategory len", len(relatedVideos))
 
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
