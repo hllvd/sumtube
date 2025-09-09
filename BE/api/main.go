@@ -785,21 +785,14 @@ func getLatestVideosByCategoryFromDynamoDB(lang string, category string, minLike
 
     var filtered []videostate.Metadata
 
-    for idx, item := range result.Items {
-        fmt.Printf("DEBUG: Raw item %d: %#v\n", idx, item)
-
+    for _, item := range result.Items {
         // Extract like_count
         likeAttr, ok := item["like_count"].(*dynamodbtypes.AttributeValueMemberN)
         if !ok {
-            fmt.Printf("DEBUG: Item %d missing like_count\n", idx)
             continue
         }
         likeCount, err := strconv.Atoi(likeAttr.Value)
-        if err != nil {
-            fmt.Printf("DEBUG: Item %d invalid like_count: %v\n", idx, err)
-            continue
-        }
-        if likeCount < minLikes {
+        if err != nil || likeCount < minLikes {
             continue
         }
 
@@ -842,9 +835,9 @@ func getLatestVideosByCategoryFromDynamoDB(lang string, category string, minLike
         }
     }
 
-    fmt.Printf("DEBUG: Returning %d filtered items\n", len(filtered))
     return filtered, nil
 }
+
 
 
 
@@ -1579,12 +1572,41 @@ func handleCategorySummaryRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
+	// loop thought items
+	// convert items to HandleSummaryRequestResponse
+	
+	// Initialize the slice with the required length
+	var output = make([]HandleSummarySingleLanguageRequestResponse, len(items))
+	for i, item := range items {
+		output[i] = convertMetadataToHandleSummaryRequestResponse(item, lang)
+	}
 
 	// Respond with JSON
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(items)
+	json.NewEncoder(w).Encode(output)
 }
 
+// Convert videostate.Metadata to HandleSummaryRequestResponse
+func convertMetadataToHandleSummaryRequestResponse(metadata videostate.Metadata, lang string) HandleSummarySingleLanguageRequestResponse {
+	// Convert metadata fields to HandleSummaryRequestResponse
+	return HandleSummarySingleLanguageRequestResponse{
+		VideoID:     metadata.Vid,
+		Title:       metadata.Title[lang],
+		Lang:        metadata.Lang,
+		VideoLang:   metadata.VideoLang,
+		Path:        metadata.Path[lang],
+		Status:      metadata.Status[lang],
+		UploaderID:  metadata.UploaderID,
+		UploadDate:  metadata.UploadDate,
+		ChannelID:   metadata.ChannelID,
+		ArticleUploadDateTime: metadata.ArticleUploadDateTime,
+		Duration:    metadata.Duration,
+		Category:    metadata.Category,
+		LikeCount:   metadata.LikeCount,
+		Content:     metadata.Summary[lang],
+		Answer:      metadata.Answer[lang],
+	}
+}
     
 
 
