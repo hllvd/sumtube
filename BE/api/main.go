@@ -762,17 +762,19 @@ func firstNonEmptyFromMap(m map[string]string) string {
 }
 
 
-func getLatestVideosByCategoryFromDynamoDB(lang string, category string, minLikes int, limit int) ([]map[string]dynamodbtypes.AttributeValue, error) {
+func getLatestVideosByCategoryFromDynamoDB(lang string, category string, minLikes int, limit int) ([]videostate.Metadata, error) {
     input := &dynamodb.QueryInput{
         TableName:              aws.String(dynamoDBTableName),
-        IndexName:              aws.String("GSI1"),
-        KeyConditionExpression: aws.String("GSI1PK = :pk"),
+        KeyConditionExpression: aws.String("PK = :pk AND begins_with(SK, :sk)"),
         ExpressionAttributeValues: map[string]dynamodbtypes.AttributeValue{
             ":pk": &dynamodbtypes.AttributeValueMemberS{
-                Value: fmt.Sprintf("LANG#%s#CATEGORY#%s", lang, category),
+                Value: fmt.Sprintf("LANG#%s", lang),
+            },
+            ":sk": &dynamodbtypes.AttributeValueMemberS{
+                Value: fmt.Sprintf("CAT#%s", category),
             },
         },
-        ScanIndexForward: aws.Bool(false), // newest first
+        ScanIndexForward: aws.Bool(false),             // newest first
         Limit:            aws.Int32(int32(limit * 2)), // fetch extra to filter manually
     }
 
@@ -781,27 +783,74 @@ func getLatestVideosByCategoryFromDynamoDB(lang string, category string, minLike
         return nil, fmt.Errorf("failed to query videos by category: %w", err)
     }
 
-    // Manually filter by LikeCount
-    var filtered []map[string]dynamodbtypes.AttributeValue
-    for _, item := range result.Items {
+    var filtered []videostate.Metadata
+
+    for idx, item := range result.Items {
+        fmt.Printf("DEBUG: Raw item %d: %#v\n", idx, item)
+
+        // Extract like_count
         likeAttr, ok := item["like_count"].(*dynamodbtypes.AttributeValueMemberN)
         if !ok {
+            fmt.Printf("DEBUG: Item %d missing like_count\n", idx)
             continue
         }
         likeCount, err := strconv.Atoi(likeAttr.Value)
         if err != nil {
+            fmt.Printf("DEBUG: Item %d invalid like_count: %v\n", idx, err)
             continue
         }
-        if likeCount >= minLikes {
-            filtered = append(filtered, item)
+        if likeCount < minLikes {
+            continue
         }
+
+        var meta videostate.Metadata
+
+        // Extract safe values
+        if v, ok := item["vid"].(*dynamodbtypes.AttributeValueMemberS); ok {
+            meta.Vid = v.Value
+        }
+        if v, ok := item["lang"].(*dynamodbtypes.AttributeValueMemberS); ok {
+            meta.Lang = v.Value
+        }
+        if v, ok := item["category"].(*dynamodbtypes.AttributeValueMemberS); ok {
+            meta.Category = v.Value
+        }
+        if v, ok := item["video_upload_date"].(*dynamodbtypes.AttributeValueMemberS); ok {
+            meta.UploadDate = v.Value
+        }
+        if v, ok := item["uploader_id"].(*dynamodbtypes.AttributeValueMemberS); ok {
+            meta.UploaderID = v.Value
+        }
+        if v, ok := item["channel_id"].(*dynamodbtypes.AttributeValueMemberS); ok {
+            meta.ChannelID = v.Value
+        }
+
+        // Handle multilingual fields (string → map)
+        if v, ok := item["title"].(*dynamodbtypes.AttributeValueMemberS); ok {
+            meta.Title = map[string]string{lang: v.Value}
+        }
+        if v, ok := item["path"].(*dynamodbtypes.AttributeValueMemberS); ok {
+            meta.Path = map[string]string{lang: v.Value}
+        }
+
+        // Set like count
+        meta.LikeCount = likeCount
+
+        filtered = append(filtered, meta)
         if len(filtered) >= limit {
             break
         }
     }
 
+    fmt.Printf("DEBUG: Returning %d filtered items\n", len(filtered))
     return filtered, nil
 }
+
+
+
+
+
+
 
 
 
@@ -1531,21 +1580,9 @@ func handleCategorySummaryRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Unmarshal each item
-	var results []DynamoDbResponseToJson
-	for _, item := range items {
-		var response DynamoDbResponseToJson
-		if err := attributevalue.UnmarshalMap(item, &response); err != nil {
-			log.Printf("Error unmarshaling item: %v", err)
-			continue
-		}
-		results = append(results, response)
-	}
-	
-
 	// Respond with JSON
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(results)
+	json.NewEncoder(w).Encode(items)
 }
 
     
