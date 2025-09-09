@@ -28,7 +28,7 @@ function YTSummarizerComponent() {
 
       // Trigger automatic submission
       const language = root?.dataset.lang || "en"
-      const apiUrl = root?.dataset.apiurl || "http://api.sumtube.io"
+      const apiUrl = root?.dataset.apiurl || "https://api.sumtube.io"
       setIsLoading(true)
       setVideoInfo(null)
       fetchSummary(apiUrl, videoId, language)
@@ -122,7 +122,7 @@ function YTSummarizerComponent() {
     setVideoInfo(null)
     const root = document.getElementById("react-root")
     const language = root?.dataset.lang || "en"
-    const apiUrl = root?.dataset.apiurl || "http://api.sumtube.io"
+    const apiUrl = root?.dataset.apiurl || "https://api.sumtube.io"
     fetchSummary(apiUrl, videoId, language)
   }
 
