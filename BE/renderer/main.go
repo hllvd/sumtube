@@ -739,6 +739,9 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
     // Extração de dados da resposta
     content := result["content"].(string)
     content = strings.ReplaceAll(content, "\\n", "\n")  // fix line breaker
+    content = strings.ReplaceAll(content, "\\(", "(")
+    content = strings.ReplaceAll(content, "\\)", ")")
+
     answer := result["answer"].(string)
     contentTitle := result["title"].(string)
     uploaderId := result["uploader_id"].(string)
