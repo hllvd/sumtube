@@ -741,6 +741,10 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
     content = strings.ReplaceAll(content, "\\n", "\n")  // fix line breaker
     content = strings.ReplaceAll(content, "\\(", "(")
     content = strings.ReplaceAll(content, "\\)", ")")
+    content = strings.ReplaceAll(content, "\\[", "[")
+    content = strings.ReplaceAll(content, "\\]", "]")
+
+    println("content : ",content)
 
     answer := result["answer"].(string)
     contentTitle := result["title"].(string)
