@@ -299,8 +299,9 @@ func GetVideoContent(videoID, lang string) (map[string]interface{}, error) {
 
 // ConvertMarkdownToHTML converts a markdown string to HTML
 func ConvertMarkdownToHTML(md string) string {
-	// Create markdown parser with extensions
-	extensions := parser.CommonExtensions | parser.AutoHeadingIDs | parser.NoEmptyLineBeforeBlock
+	// Define the extensions you want to use, excluding LaTeX support.
+	// You can choose from a list of available extensions.
+	extensions := parser.CommonExtensions &^ parser.MathJax
 	p := parser.NewWithExtensions(extensions)
 
 	// Parse markdown to AST
@@ -674,26 +675,57 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string, video ...str
     func t(lang, key string) string {
         var translations = map[string]map[string]string{
             "en": {
-                "title": "YouTube Summarizer",
+                "title": "Summarize YouTube Videos Free with AI | Sumtube.io",
+                "meta_description": "Paste any YouTube link and get a quick, clear, and free summary powered by AI. Always free.",
+                "always_free":"Always free",
                 "nav_login": "Login",
                 "heading": "Summarize Any YouTube Video",
-                "subheading": "Enter a YouTube video URL and get an AI-generated summary",
+                "subheading": "Save time with quick, clear, and always free summaries",
+                "description":"Sumtube.io is a free tool that turns long YouTube videos into quick and clear summaries. Just paste the video link to get an AI-generated summary in seconds. Perfect for students, professionals, and curious learners who want to gain knowledge faster – and best of all: it’s always free.",
                 "footer_copyright": "© 2025 YouTube Summarizer. All rights reserved.",
             },
             "pt": {
-                "title": "Resumidor de vídeos do YouTube",
+                "title": "Resumir Vídeos do YouTube Grátis com IA | Sumtube.io",
+                "always_free":"Sempre grátis",
+                "meta_description":"Cole o link de qualquer vídeo do YouTube e receba um resumo rápido, claro e gratuito com inteligência artificial. Sempre grátis.",
                 "nav_login": "Entrar",
                 "heading": "Resuma Qualquer Vídeo do YouTube",
-                "subheading": "Digite a URL de um vídeo do YouTube e obtenha um resumo gerado por IA",
+                "subheading": "Economize tempo com resumos rápidos, claros e sempre gratuitos",
+                "description":"O Sumtube.io é uma ferramenta gratuita que transforma vídeos longos do YouTube em resumos rápidos e claros. Basta colar o link do vídeo para obter um resumo gerado por inteligência artificial em segundos. Ideal para estudantes, profissionais e curiosos que querem aprender mais em menos tempo – e o melhor: será sempre grátis.",
                 "footer_copyright": "© 2025 Resumidor de YouTube. Todos os direitos reservados.",
             },
             "es": {
                 "title": "Resumidor de videos de YouTube",
+                "meta_description":"Pega cualquier enlace de YouTube y recibe un resumen rápido, claro y gratuito generado por IA. Siempre gratis.",
+                "always_free": "Siempre gratis",
                 "nav_login": "Iniciar Sesión",
                 "heading": "Resume Cualquier Video de YouTube",
-                "subheading": "Ingresa la URL de un video de YouTube y obtén un resumen generado por IA",
+                "subheading": "Ahorra tiempo con resúmenes rápidos, claros y siempre gratuitos",
+                "description":"Sumtube.io es una herramienta gratuita que convierte videos de YouTube en resúmenes rápidos y claros. Simplemente pegue el enlace del video para obtener un resumen generado por IA en segundos. Ideal para estudiantes, profesionales y curiosos que quieren aprender más rápido – y siempre es gratis.",
                 "footer_copyright": "© 2025 Resumidor de YouTube. Todos los derechos reservados.",
             },
+            "it": {
+                "title": "Riassumere Video YouTube Gratis con IA | Sumtube.io",
+                "meta_description": "Incolla un link di YouTube e ottieni un riassunto veloce, chiaro e gratuito generato dall'IA. Sempre gratis.",
+                "always_free": "Sempre gratis",
+                "nav_login": "Accedi",
+                "heading": "Riassumi Qualsiasi Video di YouTube",
+                "subheading": "Risparmia tempo con riassunti rapidi, chiari e sempre gratuiti",
+                "description": "Sumtube.io è uno strumento gratuito che trasforma i video lunghi di YouTube in riassunti rapidi e chiari. Ti basta incollare il link del video per ottenere un riassunto generato dall'intelligenza artificiale in pochi secondi. Perfetto per studenti, professionisti e curiosi che vogliono imparare di più in meno tempo – e la cosa migliore: sarà sempre gratis.",
+                "footer_copyright": "© 2025 Riassuntore YouTube. Tutti i diritti riservati.",
+            },
+            
+            "fr": {
+                "title": "Résumer les Vidéos YouTube Gratuitement avec l’IA | Sumtube.io",
+                "meta_description": "Collez un lien YouTube et obtenez un résumé rapide, clair et gratuit généré par l’IA. Toujours gratuit.",
+                "nav_login": "Connexion",
+                "always_free": "Toujours gratuit",
+                "heading": "Résumez N’importe Quelle Vidéo YouTube",
+                "subheading": "Gagnez du temps avec des résumés rapides, clairs et toujours gratuits",
+                "description": "Sumtube.io est un outil gratuit qui transforme les longues vidéos YouTube en résumés rapides et clairs. Collez simplement le lien de la vidéo pour obtenir un résumé généré par l’intelligence artificielle en quelques secondes. Parfait pour les étudiants, les professionnels et les curieux qui veulent apprendre plus en moins de temps – et le mieux : c’est toujours gratuit.",
+                "footer_copyright": "© 2025 Résumeur YouTube. Tous droits réservés.",
+            },
+            
         }
         
         if translations[lang] == nil {

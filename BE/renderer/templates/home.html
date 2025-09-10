@@ -2,6 +2,7 @@
 <html lang="{{if eq .Language "pt"}}pt-br{{else}}{{.Language}}{{end}}">
   <head>
     <meta charset="UTF-8" />
+    <meta name="description" content="{{call .T "meta_description"}}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="https://d39ijcik5pqpvl.cloudfront.net/favicon.ico" sizes="32x32">
     <title>{{call .T "title"}}</title>
@@ -23,10 +24,10 @@
     </nav>
 
     <div class="max-w-2xl mx-auto mt-16 text-center">
-      <h2 class="text-3xl font-bold">{{call .T "heading"}}</h2>
-      <p class="text-gray-600 mt-2">
+      <h1 class="text-3xl font-bold main-title" data-content="{{call .T "always_free"}}">{{call .T "heading"}}</h1>
+      <h2 class="text-gray-600 mt-2">
         {{call .T "subheading"}}
-      </p>
+      </h2>
       
       <!-- React form mounts here -->
       <div
@@ -39,7 +40,11 @@
         <!-- React replaces this -->
       </div>
     </div>
-
+    <area>
+      <div id="main-description-home">
+        {{call .T "description"}}
+      </div>
+    </area>
     <footer class="mt-16 text-center text-gray-500 text-sm">
       <p>&copy; 2025 YouTube Summarizer. All rights reserved.</p>
       <div class="mt-2">
@@ -52,5 +57,38 @@
     </footer>
 
     <script type="module" src="/static/app.js"></script>
+    <style>
+      /** home **/
+h1.text-3xl.font-bold.main-title {
+  display: block;
+}
+h1.text-3xl.font-bold.main-title:after {
+  content: attr(data-content);
+  color: #dc2625;
+  /* background: #dc2625; */
+  /* border: 1px; */
+  border-radius: 8px;
+  font-size: 12px;
+  padding: 1px 10px;
+  margin-top: -9px;
+  position: absolute;
+  /* font-weight: normal; */
+  /* display: inline-block; */
+  /* height: 28px; */
+  /* vertical-align: middle; */
+  /* border-color: #dc2625; */
+  line-height: 11px;
+  width: 62px;
+  margin-left: -9px;
+  text-align: left;
+}
+
+#main-description-home{
+  margin: auto;
+    width: 890px;
+    display: block;
+    padding: 39px
+}
+    </style>
   </body>
 </html>

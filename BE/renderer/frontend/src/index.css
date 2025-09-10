@@ -66,3 +66,28 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/** home **/
+h1.text-3xl.font-bold.main-title {
+  display: block;
+}
+h1.text-3xl.font-bold.main-title:after {
+  content: attr(data-content) "Sempre grátis";
+  color: #dc2625;
+  /* background: #dc2625; */
+  /* border: 1px; */
+  border-radius: 8px;
+  font-size: 12px;
+  padding: 1px 10px;
+  margin-top: -9px;
+  position: absolute;
+  /* font-weight: normal; */
+  /* display: inline-block; */
+  /* height: 28px; */
+  /* vertical-align: middle; */
+  /* border-color: #dc2625; */
+  line-height: 11px;
+  width: 62px;
+  margin-left: -9px;
+  text-align: left;
+}
