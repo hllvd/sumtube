@@ -606,13 +606,16 @@ func summarizeText(caption string, lang string, title string) (string, error) {
 	println("tsToDuration: ", tsToDuration)
 	println("seconds",(20*60))
 	systemPrompt := ""
-	if tsToDuration < (20*60) {
-		systemPrompt = system1PromptTxt
-		println("using prompt: prompt1")
-	}else{
-		systemPrompt = system2PromptTxt
-		println("using prompt: prompt2")
-	}
+
+	systemPrompt = system2PromptTxt
+	println("using prompt: prompt2")
+	// if tsToDuration < (20*60) {
+	// 	systemPrompt = system2PromptTxt
+	// 	println("using prompt: prompt2")
+	// }else{
+	// 	systemPrompt = system2PromptTxt
+	// 	println("using prompt: prompt2")
+	// }
 
     
 
