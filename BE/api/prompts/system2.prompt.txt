@@ -35,7 +35,7 @@ Here's the fields:
 
 - ╔$title:
     - Just copy the title if this is on the same language
-    - If the title is in different language, pleas translate it
+    - If the title is in different language, please translate it
     - When finish the content of this field, please use ╗
 
 ** The final expected output would be something like: **
