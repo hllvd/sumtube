@@ -683,6 +683,7 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string, video ...str
                 "subheading": "Save time with quick, clear, and always free summaries",
                 "description":"Sumtube.io is a free tool that turns long YouTube videos into quick and clear summaries. Just paste the video link to get an AI-generated summary in seconds. Perfect for students, professionals, and curious learners who want to gain knowledge faster – and best of all: it’s always free.",
                 "footer_copyright": "© 2025 YouTube Summarizer. All rights reserved.",
+                "title_blog": "Video Summary",
             },
             "pt": {
                 "title": "Resumir Vídeos do YouTube Grátis com IA | Sumtube.io",
@@ -693,6 +694,7 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string, video ...str
                 "subheading": "Economize tempo com resumos rápidos, claros e sempre gratuitos",
                 "description":"O Sumtube.io é uma ferramenta gratuita que transforma vídeos longos do YouTube em resumos rápidos e claros. Basta colar o link do vídeo para obter um resumo gerado por inteligência artificial em segundos. Ideal para estudantes, profissionais e curiosos que querem aprender mais em menos tempo – e o melhor: será sempre grátis.",
                 "footer_copyright": "© 2025 Resumidor de YouTube. Todos os direitos reservados.",
+                "title_blog": "Resumo do vídeo",
             },
             "es": {
                 "title": "Resumidor de videos de YouTube",
@@ -703,6 +705,7 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string, video ...str
                 "subheading": "Ahorra tiempo con resúmenes rápidos, claros y siempre gratuitos",
                 "description":"Sumtube.io es una herramienta gratuita que convierte videos de YouTube en resúmenes rápidos y claros. Simplemente pegue el enlace del video para obtener un resumen generado por IA en segundos. Ideal para estudiantes, profesionales y curiosos que quieren aprender más rápido – y siempre es gratis.",
                 "footer_copyright": "© 2025 Resumidor de YouTube. Todos los derechos reservados.",
+                "title_blog": "Resumen del vídeo",
             },
             "it": {
                 "title": "Riassumere Video YouTube Gratis con IA | Sumtube.io",
@@ -713,6 +716,7 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string, video ...str
                 "subheading": "Risparmia tempo con riassunti rapidi, chiari e sempre gratuiti",
                 "description": "Sumtube.io è uno strumento gratuito che trasforma i video lunghi di YouTube in riassunti rapidi e chiari. Ti basta incollare il link del video per ottenere un riassunto generato dall'intelligenza artificiale in pochi secondi. Perfetto per studenti, professionisti e curiosi che vogliono imparare di più in meno tempo – e la cosa migliore: sarà sempre gratis.",
                 "footer_copyright": "© 2025 Riassuntore YouTube. Tutti i diritti riservati.",
+                "title_blog": "Riassunto del video",
             },
             
             "fr": {
@@ -724,6 +728,8 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string, video ...str
                 "subheading": "Gagnez du temps avec des résumés rapides, clairs et toujours gratuits",
                 "description": "Sumtube.io est un outil gratuit qui transforme les longues vidéos YouTube en résumés rapides et clairs. Collez simplement le lien de la vidéo pour obtenir un résumé généré par l’intelligence artificielle en quelques secondes. Parfait pour les étudiants, les professionnels et les curieux qui veulent apprendre plus en moins de temps – et le mieux : c’est toujours gratuit.",
                 "footer_copyright": "© 2025 Résumeur YouTube. Tous droits réservés.",
+                "title_blog": "Résumé de la vidéo",
+
             },
             
         }
@@ -816,6 +822,7 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
         TimeSavedMinutes     int
         Content              template.HTML
         Answer               template.HTML
+        T        func(string) string // Translation function
     }{
         Language:             lang,
         Path:                 r.URL.Path,
@@ -832,6 +839,9 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
         TimeSavedMinutes:     timeSaved,
         Content:              template.HTML(ConvertMarkdownToHTML(ReplaceMarkdownTimestamps(videoId, content))),
         Answer:               template.HTML(ConvertMarkdownToHTML(answer)),
+        T: func(key string) string {
+            return t(lang, key)
+        },
     }
 
     w.Header().Set("Content-Type", "text/html")

@@ -3,8 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="{{.Answer}}" />
     <link rel="icon" href="https://d39ijcik5pqpvl.cloudfront.net/favicon.ico" sizes="32x32">
-    <title>Sumtube : {{.Title}}</title>
+    <title>{{call .T "meta_description"}} : {{.Title}} | Sumtube</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
       .markdown a[href^="https://youtu.be"] {
