@@ -61,6 +61,24 @@ func extractLang(path string) (string, bool) {
 	return "", false
 }
 
+type MetadataSingleLanguage struct {
+	Title                 string `json:"title,omitempty"`			 
+	Vid                   string `json:"videoId"`
+	Lang                  string `json:"lang"`
+	VideoLang         	  string `json:"video_lang,omitempty"`
+	Category              string `json:"category,omitempty"`
+    Summary            	  string `json:"content,omitempty"`           
+    Answer                string `json:"answer,omitempty"`           
+    Path               	  string `json:"path,omitempty"`              
+    Status             	  string `json:"status,omitempty"`            
+	UploaderID            string `json:"uploader_id,omitempty"`
+	UploadDate            string `json:"video_upload_date,omitempty"`
+	ChannelID			  string `json:"channel_id,omitempty"`
+	ArticleUploadDateTime string `json:"article_update_datetime,omitempty"`
+	Duration              int `json:"duration,omitempty"`
+	LikeCount			  int `json:"like_count,omitempty"`
+}
+
 
 
 func getCurrentLang(w http.ResponseWriter, r *http.Request) string {
@@ -262,38 +280,38 @@ func GetVideosFromCategory(lang string, categoryName string, limit int) ([]map[s
 
     
 // GetVideoContent fetches content from the API for a given video ID and language
-func GetVideoContent(videoID, lang string) (map[string]interface{}, error) {
+func GetVideoContent(videoID, lang string) (*MetadataSingleLanguage, error) {
     // Prepare the payload
     payload := map[string]string{
         "videoId":  videoID,
         "language": lang,
     }
-    
+
     payloadBytes, err := json.Marshal(payload)
     if err != nil {
         return nil, fmt.Errorf("failed to encode payload: %v", err)
     }
-    
+
     // Call the API
-	//
     resp, err := http.Post(os.Getenv("SUMTUBE_API"), "application/json", bytes.NewBuffer(payloadBytes))
     if err != nil {
         return nil, fmt.Errorf("failed to call API: %v", err)
     }
     defer resp.Body.Close()
-    
+
     body, err := io.ReadAll(resp.Body)
     if err != nil {
         return nil, fmt.Errorf("failed to read API response: %v", err)
     }
-    
-    var result map[string]interface{}
+
+    var result MetadataSingleLanguage
     if err := json.Unmarshal(body, &result); err != nil {
         return nil, fmt.Errorf("failed to parse API response: %v", err)
     }
-    
-    return result, nil
+
+    return &result, nil
 }
+
 
 
 
@@ -533,11 +551,11 @@ func router(w http.ResponseWriter, r *http.Request) {
             result, _ := GetVideoContent(videoId, lang)
             // Go do Blog
             if err == nil {
-                if status, ok := result["status"].(string); ok {
+                if status  := result.Status; status == "Completed" {
                     println("here")
                     println("status: ", status)
                     if (status == "completed"){
-                        path := result["path"].(string)
+                        path := result.Path
                         newPath := fmt.Sprintf("/%s/%s/%s", lang, videoId, path)
                         redirectURL := &url.URL{
                             Path:     newPath,
@@ -766,7 +784,7 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
         return
     }
 
-    relatedVideos, err := GetVideosFromCategory(lang, result["category"].(string), 10)
+    relatedVideos, err := GetVideosFromCategory(lang, result.Category, 10)
     log.Println("GetVideoFromCategory len", len(relatedVideos))
 
     if err != nil {
@@ -775,7 +793,7 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
     }
 
     // Extração de dados da resposta
-    content := result["content"].(string)
+    content := result.Summary
     content = strings.ReplaceAll(content, "\\n", "\n")  // fix line breaker
     content = strings.ReplaceAll(content, "\\(", "(")
     content = strings.ReplaceAll(content, "\\)", ")")
@@ -784,18 +802,20 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
 
     println("content : ",content)
 
-    answer := result["answer"].(string)
-    contentTitle := result["title"].(string)
-    uploaderId := result["uploader_id"].(string)
+    answer := result.Answer
+    contentTitle := result.Title
+    uploaderId := result.UploaderID
 
-    durationTest := result["duration"]
-    println("durationTest: ", durationTest)
-    durationStr := "4"
-    durationInt, _ := strconv.Atoi(durationStr)
+    durationInt := (result.Duration)/60
+
+    //convert int to str
+    durationStr := strconv.Itoa(durationInt)
+
+
 
 
     uploadDate := ""
-    if date, ok := result["video_upload_date"].(string); ok && date != "" {
+    if date := result.UploadDate; date != "" {
         uploadDate = formatDate(lang, date)
     }
 
@@ -901,9 +921,9 @@ func loadSummary(w http.ResponseWriter, r *http.Request, videoId string, lang st
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
     }
-    println("HERE path: %s",  result["path"].(string) )
+    println("HERE path: %s",  result.Path )
     // Check if path exists and redirect if it does
-    if path, ok := result["path"].(string); ok && path != "" {
+    if path := result.Path; path != "" {
         baseUrl := os.Getenv("BASE_URL")
         if baseUrl == "" {
             baseUrl = "http://" + r.Host
@@ -937,9 +957,9 @@ func loadSummary(w http.ResponseWriter, r *http.Request, videoId string, lang st
     }
     
     // Extract properties from the response
-    content := result["content"].(string)
-    answer := result["answer"].(string)
-    contentTitle := result["title"].(string)
+    content := result.Summary
+    answer := result.Answer
+    contentTitle := result.Title
 
     data := struct {
         Language    string
