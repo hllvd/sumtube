@@ -50,8 +50,8 @@
         </h1>
         <p class="text-sm text-gray-500 mb-4 flex items-center gap-2">
           📅 {{.UploadDate}} • 🎥 {{.VideoDurationMinutes}} min vídeo →
-          📖 {{.ReadingTimeMinutes}} min leitura •
-          ⏱️ <span class="text-green-600 font-semibold">Você economiza {{.TimeSavedMinutes}} min</span>
+          📖 {{.ReadingTimeMinutes}} min {{call .T "reading"}} •
+          ⏱️ <span class="text-green-600 font-semibold">{{call .T "you_saved"}} {{.TimeSavedMinutes}} min</span>
         </p>
 
         <!-- Blog Content -->

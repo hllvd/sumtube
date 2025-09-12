@@ -702,6 +702,8 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string, video ...str
                 "description":"Sumtube.io is a free tool that turns long YouTube videos into quick and clear summaries. Just paste the video link to get an AI-generated summary in seconds. Perfect for students, professionals, and curious learners who want to gain knowledge faster – and best of all: it’s always free.",
                 "footer_copyright": "© 2025 YouTube Summarizer. All rights reserved.",
                 "title_blog": "Video Summary",
+                "you_saved":"You saved",
+                "reading": "reading",
             },
             "pt": {
                 "title": "Resumir Vídeos do YouTube Grátis com IA | Sumtube.io",
@@ -713,6 +715,8 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string, video ...str
                 "description":"O Sumtube.io é uma ferramenta gratuita que transforma vídeos longos do YouTube em resumos rápidos e claros. Basta colar o link do vídeo para obter um resumo gerado por inteligência artificial em segundos. Ideal para estudantes, profissionais e curiosos que querem aprender mais em menos tempo – e o melhor: será sempre grátis.",
                 "footer_copyright": "© 2025 Resumidor de YouTube. Todos os direitos reservados.",
                 "title_blog": "Resumo do vídeo",
+                "you_saved":"Você economizou",
+                "reading": "leitura",
             },
             "es": {
                 "title": "Resumidor de videos de YouTube",
@@ -724,6 +728,8 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string, video ...str
                 "description":"Sumtube.io es una herramienta gratuita que convierte videos de YouTube en resúmenes rápidos y claros. Simplemente pegue el enlace del video para obtener un resumen generado por IA en segundos. Ideal para estudiantes, profesionales y curiosos que quieren aprender más rápido – y siempre es gratis.",
                 "footer_copyright": "© 2025 Resumidor de YouTube. Todos los derechos reservados.",
                 "title_blog": "Resumen del vídeo",
+                "you_saved":"Ahorraste",
+                "reading": "lectura",
             },
             "it": {
                 "title": "Riassumere Video YouTube Gratis con IA | Sumtube.io",
@@ -735,6 +741,8 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string, video ...str
                 "description": "Sumtube.io è uno strumento gratuito che trasforma i video lunghi di YouTube in riassunti rapidi e chiari. Ti basta incollare il link del video per ottenere un riassunto generato dall'intelligenza artificiale in pochi secondi. Perfetto per studenti, professionisti e curiosi che vogliono imparare di più in meno tempo – e la cosa migliore: sarà sempre gratis.",
                 "footer_copyright": "© 2025 Riassuntore YouTube. Tutti i diritti riservati.",
                 "title_blog": "Riassunto del video",
+                "you_saved":"Hai risparmiato",
+                "reading": "lettura",
             },
             
             "fr": {
@@ -747,6 +755,8 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string, video ...str
                 "description": "Sumtube.io est un outil gratuit qui transforme les longues vidéos YouTube en résumés rapides et clairs. Collez simplement le lien de la vidéo pour obtenir un résumé généré par l’intelligence artificielle en quelques secondes. Parfait pour les étudiants, les professionnels et les curieux qui veulent apprendre plus en moins de temps – et le mieux : c’est toujours gratuit.",
                 "footer_copyright": "© 2025 Résumeur YouTube. Tous droits réservés.",
                 "title_blog": "Résumé de la vidéo",
+                "you_saved":"Vous avez économisé",
+                "reading": "lecture",
 
             },
             
@@ -873,13 +883,10 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
 
 // formatDate formats a date string based on language
 func formatDate(lang, dateStr string) string {
-	if len(dateStr) != 8 {
-		return dateStr
-	}
 
 	year := dateStr[:4]
-	month := dateStr[4:6]
-	day := dateStr[6:8]
+	month := dateStr[5:7]
+	day := dateStr[8:10]
 
 	monthInt, err := strconv.Atoi(month)
 	if err != nil {
