@@ -10,6 +10,9 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
+# Copy prompts
+COPY prompts /app/prompts
+
 # Copy the source code
 COPY . .
 

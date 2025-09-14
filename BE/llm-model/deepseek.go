@@ -17,10 +17,11 @@ func CallDeepSeek(userPrompt string) (string, error) {
 		return "", fmt.Errorf("DEEPSEEK_API_KEY environment variable is not set")
 	}
 
+	// Prepare request body
 	requestBody := map[string]interface{}{
 		"model": "deepseek-chat",
 		"messages": []map[string]string{
-			{"role": "system", "content": "You are a helpful assistant."},
+			{"role": "system", "content": userPrompt},
 			{"role": "user", "content": userPrompt},
 		},
 		"stream": false,
@@ -52,7 +53,7 @@ func CallDeepSeek(userPrompt string) (string, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("received non-200 response from DeepSeek: %s, response: %s", resp.Status, string(responseData))
+		return "", fmt.Errorf("non-200 response from DeepSeek: %s, %s", resp.Status, string(responseData))
 	}
 
 	var result map[string]interface{}
