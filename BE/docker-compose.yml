@@ -47,6 +47,27 @@ services:
     environment:
       - FLASK_ENV=production
 
+  llm-model:
+    build: ./llm-model
+    container_name: llm-model
+    ports:
+      - "3030:3030"
+    networks:
+      - app-network
+    env_file:
+      - .env
+    environment:
+      - DEFAULT_LLM=gemini-2.5-flash
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0" # Máximo 1 vCPU
+          memory: 512M # Máximo 512MB RAM
+        reservations:
+          cpus: "0.5" # Reserva 50% de 1 vCPU
+          memory: 256M # Reserva 256MB RAM
+    restart: always
+
   nginx:
     image: nginx:latest
     container_name: nginx
@@ -79,6 +100,11 @@ services:
 
   certbot:
     image: certbot/certbot
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5" # Limit to 50% of one CPU core
+          memory: 512M # Limit to 512MB of RAM
     container_name: certbot
     env_file:
       - .env
