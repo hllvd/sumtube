@@ -38,18 +38,30 @@ type ResponsePayload struct {
 }
 
 // loadPromptTemplate reads a template file from /app/prompts
-func loadPromptTemplate(templateName string) (string, error) {
+// loadPromptTemplate loads both system and user prompt files
+// Returns: systemPrompt, userPrompt, error
+func loadPromptTemplate(templateName string) (string, string, error) {
 	if templateName == "" {
-		return "", nil
+		return "", "", nil
 	}
 
-	promptPath := filepath.Join("/app/prompts", templateName+".txt")
-	content, err := ioutil.ReadFile(promptPath)
+	systemPath := filepath.Join("/app/prompts", templateName+".system.prompt.txt")
+	userPath := filepath.Join("/app/prompts", templateName+".user.prompt.txt")
+
+	systemContent, err := ioutil.ReadFile(systemPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to load prompt template '%s': %w", templateName, err)
+		return "", "", fmt.Errorf("failed to load system prompt '%s': %w", systemPath, err)
 	}
-	return string(content), nil
+
+	userContent, err := ioutil.ReadFile(userPath)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to load user prompt '%s': %w", userPath, err)
+	}
+
+	return string(systemContent), string(userContent), nil
 }
+
+
 
 
 func summarizeHandler(w http.ResponseWriter, r *http.Request) {
@@ -67,16 +79,17 @@ func summarizeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load template if provided
+	var systemPrompt, userPrompt string
 	if req.PromptTemplate != "" {
-		content, err := loadPromptTemplate(req.PromptTemplate)
+		systemPrompt, userPrompt, err := loadPromptTemplate(req.PromptTemplate)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		req.Prompt = content
+		req.Prompt = systemPrompt+" - "+userPrompt
 		// Print current prompt for debugging
 		fmt.Println("Loaded prompt template content:")
-		fmt.Println(req.Prompt)
+		//fmt.Println(req.Prompt)
 	}
 
 	resp := ResponsePayload{
@@ -87,7 +100,12 @@ func summarizeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Model == "deepseekr1" {
-		summary, err := CallDeepSeek(req.Prompt)
+		// title
+		title := req.Input.Title
+		lang := req.Input.Language
+		caption := req.Input.Captions
+		userPrompt := fmt.Sprintf(string(userPrompt), title, lang, caption)
+		summary, err := CallDeepSeek(systemPrompt, userPrompt)
 		if err != nil {
 			resp.Error = err.Error()
 		} else {

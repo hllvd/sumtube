@@ -10,18 +10,20 @@ import (
 )
 
 // CallDeepSeek calls the DeepSeek API with the given user prompt and returns the response content
-func CallDeepSeek(userPrompt string) (string, error) {
+func CallDeepSeek(systemPrompt string, userPrompt string) (string, error) {
 	apiURL := "https://api.deepseek.com/chat/completions"
 	apiKey := os.Getenv("DEEPSEEK_API_KEY")
 	if apiKey == "" {
 		return "", fmt.Errorf("DEEPSEEK_API_KEY environment variable is not set")
 	}
+	fmt.Println("Userprompt ", userPrompt)
+
 
 	// Prepare request body
 	requestBody := map[string]interface{}{
 		"model": "deepseek-chat",
 		"messages": []map[string]string{
-			{"role": "system", "content": userPrompt},
+			{"role": "system", "content": systemPrompt},
 			{"role": "user", "content": userPrompt},
 		},
 		"stream": false,

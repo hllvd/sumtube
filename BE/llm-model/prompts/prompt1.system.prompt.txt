@@ -15,6 +15,12 @@ Here's the fields:
     - You can link the subject of the summary to its context in the video by specifying the exact timestamp. For example: "[Elon Musk](00:10:51) said that...". This will link to minute 10, second 51 of the text.
     - If the summary is in list format, start with a **bold subtitle**, followed by a sentence that includes a timestamp linking to the specific moment in the video. Example: "**Key Takeaways**\n\n[At 10:51](00:10:51), Elon Musk said...". Then, present the summarized points in a clear and structured list.
     - Keep it concise and structured without stating that it is a summary
+    - structure for content field:
+    -- On the begging of the content, you should display a summary no more than 150 words for video overall
+    -- As this is more than 20 minutes video, it might be good to display a concise list of main points from the video, each point should contain a index to link in markdown directly to the video timestamp. example: [(00:00:34) Politics are not good](00:00:34), a ### title and a description., example:
+    ### [(00:00:34) Politics are not good](00:00:34)
+    Description here
+    - hte output will be in
     - When finish the content of this field, please use ╗
 
 - ╔$lang:
