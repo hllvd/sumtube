@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 )
 
 // RequestPayload defines the expected input parameters
@@ -15,14 +16,17 @@ type RequestPayload struct {
 
 // ResponsePayload defines the response structure
 type ResponsePayload struct {
-	Prompt  string      `json:"prompt"`
-	Model   string      `json:"model"`
-	Output  string      `json:"output"`
-	Result  interface{} `json:"result,omitempty"`
-	Error   string      `json:"error,omitempty"`
+	Prompt          string      `json:"prompt"`
+	Model           string      `json:"model"`
+	Output          string      `json:"output"`
+	Result          interface{} `json:"result,omitempty"`
+	Error           string      `json:"error,omitempty"`
+	RequestDuration string      `json:"request_duration"` // new field
 }
 
 func summarizeHandler(w http.ResponseWriter, r *http.Request) {
+	start := time.Now() // capture start time
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -50,6 +54,10 @@ func summarizeHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		resp.Result = map[string]string{"echo": req.Prompt}
 	}
+
+	// compute request duration
+	duration := time.Since(start)
+	resp.RequestDuration = duration.String()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
