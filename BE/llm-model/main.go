@@ -79,9 +79,7 @@ func summarizeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load template if provided
-	var systemPrompt, userPrompt string
-	if req.PromptTemplate != "" {
-		systemPrompt, userPrompt, err := loadPromptTemplate(req.PromptTemplate)
+	systemPrompt, userPrompt, err := loadPromptTemplate(req.PromptTemplate)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -90,7 +88,6 @@ func summarizeHandler(w http.ResponseWriter, r *http.Request) {
 		// Print current prompt for debugging
 		fmt.Println("Loaded prompt template content:")
 		//fmt.Println(req.Prompt)
-	}
 
 	resp := ResponsePayload{
 		Prompt: req.Prompt,
