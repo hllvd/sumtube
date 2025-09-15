@@ -37,7 +37,6 @@ type ResponsePayload struct {
 	RequestDuration string       `json:"request_duration"`
 }
 
-// loadPromptTemplate reads a template file from /app/prompts
 // loadPromptTemplate loads both system and user prompt files
 // Returns: systemPrompt, userPrompt, error
 func loadPromptTemplate(templateName string) (string, string, error) {
@@ -61,9 +60,6 @@ func loadPromptTemplate(templateName string) (string, string, error) {
 	return string(systemContent), string(userContent), nil
 }
 
-
-
-
 func summarizeHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
@@ -80,14 +76,15 @@ func summarizeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Load template if provided
 	systemPrompt, userPrompt, err := loadPromptTemplate(req.PromptTemplate)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		req.Prompt = systemPrompt+" - "+userPrompt
-		// Print current prompt for debugging
-		fmt.Println("Loaded prompt template content:")
-		//fmt.Println(req.Prompt)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	req.Prompt = systemPrompt + " - " + userPrompt
+
+	// Print current prompt for debugging
+	fmt.Println("System Prompt:", systemPrompt)
+	fmt.Println("User Prompt:", userPrompt)
 
 	resp := ResponsePayload{
 		Prompt: req.Prompt,
@@ -96,19 +93,33 @@ func summarizeHandler(w http.ResponseWriter, r *http.Request) {
 		Input:  req.Input,
 	}
 
-	if req.Model == "deepseekr1" {
-		// title
+	switch req.Model {
+	case "deepseekr1":
+		// Format userPrompt with inputs
 		title := req.Input.Title
 		lang := req.Input.Language
 		caption := req.Input.Captions
-		userPrompt := fmt.Sprintf(string(userPrompt), title, lang, caption)
-		summary, err := CallDeepSeek(systemPrompt, userPrompt)
+		userPromptFormatted := fmt.Sprintf(userPrompt, title, lang, caption)
+
+		summary, err := CallDeepSeek(systemPrompt, userPromptFormatted)
 		if err != nil {
 			resp.Error = err.Error()
 		} else {
 			resp.Result = summary
 		}
-	} else {
+
+	case "gemini-2.0-flash":
+		// Build Gemini prompt
+		userPromptFormatted := fmt.Sprintf(userPrompt, req.Input.Title, req.Input.Language, req.Input.Captions)
+
+		summary, err := CallGemini(systemPrompt, userPromptFormatted)
+		if err != nil {
+			resp.Error = err.Error()
+		} else {
+			resp.Result = summary
+		}
+
+	default:
 		resp.Result = map[string]interface{}{
 			"echo":  req.Prompt,
 			"input": req.Input,
