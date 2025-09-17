@@ -6,22 +6,26 @@ Each field should be enclosed with control characters to indicate where it start
 
 Here's the fields:
 
-- ╔$content:
-    - A summarized version of the text in Markdown format.
-    - Use **bold**, *italic*, lists, and headers for emphasis where needed. Use \n for line breaks.
-    - If you need to use quotes, wrap the sentence with underscores (_like this_) instead of regular quotes.
-    - If more text is required, you may add an extra paragraph, but it should not exceed 300 words.
-    - If the title is a listicle (e.g., "Top 10 Ways to..."), format the summary as a list.
-    - You can link the subject of the summary to its context in the video by specifying the exact timestamp. For example: "[Elon Musk](00:10:51) said that...". This will link to minute 10, second 51 of the text.
-    - If the summary is in list format, start with a **bold subtitle**, followed by a sentence that includes a timestamp linking to the specific moment in the video. Example: "**Key Takeaways**\n\n[At 10:51](00:10:51), Elon Musk said...". Then, present the summarized points in a clear and structured list.
-    - Keep it concise and structured without stating that it is a summary
-    - structure for content field:
-    -- On the begging of the content, you should display a summary no more than 150 words for video overall
-    -- As this is more than 20 minutes video, it might be good to display a concise list of main points from the video, each point should contain a index to link in markdown directly to the video timestamp. example: [(00:00:34) Politics are not good](00:00:34), a ### title and a description., example:
-    ### [(00:00:34) Politics are not good](00:00:34)
-    Description here
-    - hte output will be in
-    - When finish the content of this field, please use ╗
+### ╔$content field rules (MANDATORY FORMAT):
+1. Begin with a **concise overall summary** of the video (maximum 150 words).  
+2. After the summary, the structure must follow one of these two formats depending on the title type:  
+   - **If the title is a listicle** (e.g., starts with "Top 10...", "5 Ways...", "7 Tips..."):  
+     - Present the content as a **numbered Markdown list**.  
+     - Each item must include:  
+       - A level-3 header in the format:  
+         `### [1. (HH:MM:SS) Title of Item](HH:MM:SS)`  
+       - A short description in plain text (1–5 sentences).  
+   - **If the title is not a listicle**:  
+     - Present the content as a **structured list of main points**, where each point is formatted EXACTLY as follows:  
+       - A level-3 header:  
+         `### [(HH:MM:SS) Title of Point](HH:MM:SS)`  
+       - A short description in plain text (1–5 sentences).  
+3. Every point or list item **must** contain a timestamp reference `(HH:MM:SS)` in both the link and the heading.  
+4. Use **bold**, *italic*, and bullet/numbered lists for emphasis where appropriate, but always keep the structure clean and Markdown-compatible.  
+5. Do not state that this is a "summary", "key takeaways", or similar labels; just present the content directly.  
+6. The total content (summary + list) must not exceed **400 words**.  
+7. Close the field with ╗.
+
 
 - ╔$lang:
     - Detect and output the language code of the text.

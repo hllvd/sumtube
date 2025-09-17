@@ -605,105 +605,71 @@ func summarizeText(caption string, lang string, title string) (string, error) {
 	println("ts",ts)
 	println("tsToDuration: ", tsToDuration)
 	println("seconds",(20*60))
-	systemPrompt := ""
-
-	systemPrompt = system2PromptTxt
-	println("using prompt: prompt2")
-	// if tsToDuration < (20*60) {
-	// 	systemPrompt = system2PromptTxt
-	// 	println("using prompt: prompt2")
-	// }else{
-	// 	systemPrompt = system2PromptTxt
-	// 	println("using prompt: prompt2")
-	// }
-
-    
-
-    userPromptTemplate := user1PromptTxt
-
-    // Rest of your function remains the same...
-    userPrompt := fmt.Sprintf(string(userPromptTemplate), title, lang, caption)
-
-	apiURL := "https://api.deepseek.com/chat/completions"
-	apiKey := os.Getenv("DEEPSEEK_API_KEY")
-	if apiKey == "" {
-		return "", fmt.Errorf("DEEPSEEK_API_KEY environment variable is not set")
+	
+	summary, err := llmModelSummarize(title, lang, caption )
+	if (err != nil) {
+		return "", fmt.Errorf("failed to summarize text: %w", err)
 	}
+	return string(summary.Result), nil
+}
 
-	requestBody := map[string]interface{}{
-		"model": "deepseek-chat",
-		"messages": []map[string]string{
-			{
-				"role":    "system",
-				"content": string(systemPrompt),
-			},
-			{
-				"role":    "user",
-				"content": userPrompt,
-			},
-		},
-		"stream": false,
+// Struct to send request
+type SummarizeRequest struct {
+	Model          string `json:"model"`
+	PromptTemplate string `json:"prompt_template"`
+	Input          struct {
+		Language string `json:"language"`
+		Title    string `json:"title"`
+		Captions string `json:"captions"`
+	} `json:"input"`
+}
+
+// Struct for response
+type SummarizeResponse struct {
+	Result          string `json:"result"`
+	Error           string      `json:"error,omitempty"`
+	RequestDuration string      `json:"request_duration"`
+}
+
+// Calls llm-model service
+func llmModelSummarize(title string, lang string, caption string) (*SummarizeResponse, error) {
+	url := "http://llm-model:3030/summarize" // service name from docker-compose
+
+	// Build request payload
+	payload := SummarizeRequest{
+		Model:          "gemini-2.0-flash",       // deepseekr1 or "gemini-2.0-flash"
+		PromptTemplate: "prompt1",          // choose which template
 	}
+	payload.Input.Language = lang
+	payload.Input.Title = title
+	payload.Input.Captions = caption
 
-	jsonData, err := json.Marshal(requestBody)
+	jsonData, err := json.Marshal(payload)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal request body: %w", err)
+		return nil, fmt.Errorf("failed to encode payload: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", apiURL, bytes.NewReader(jsonData))
+	// Send request
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to send request to DeepSeek: %w", err)
+		return nil, fmt.Errorf("failed to call llm-model: %w", err)
 	}
 	defer resp.Body.Close()
 
-	responseData, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	fmt.Printf("DeepSeek API Response Status: %s\n", resp.Status)
-	fmt.Printf("DeepSeek API Response Body: %s\n", string(responseData))
+	body, _ := ioutil.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("received non-200 response from DeepSeek: %s, response: %s", resp.Status, string(responseData))
+		return nil, fmt.Errorf("llm-model returned status %s: %s", resp.Status, string(body))
 	}
 
-	var result map[string]interface{}
-	if err := json.Unmarshal(responseData, &result); err != nil {
-		return "", fmt.Errorf("failed to parse response JSON: %w", err)
+	var summarizeResp SummarizeResponse
+	if err := json.Unmarshal(body, &summarizeResp); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
-	choices, exists := result["choices"].([]interface{})
-	if !exists || len(choices) == 0 {
-		return "", fmt.Errorf("no choices found in response")
-	}
-
-	firstChoice, ok := choices[0].(map[string]interface{})
-	if !ok {
-		return "", fmt.Errorf("invalid choice format in response")
-	}
-
-	message, exists := firstChoice["message"].(map[string]interface{})
-	if !exists {
-		return "", fmt.Errorf("no message found in choice")
-	}
-
-	summary, exists := message["content"].(string)
-	if !exists {
-		return "", fmt.Errorf("no content found in message")
-	}
-
-	return summary, nil
+	return &summarizeResp, nil
 }
+
 
 func sanitizeSubtitle(subtitle string) string {
 	re := regexp.MustCompile(`\s*\n\n[\s\S]*?</c>\n`)
