@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -76,15 +77,28 @@ func summarizeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Load template if provided
 	systemPrompt, userPrompt, err := loadPromptTemplate(req.PromptTemplate)
+	//create a dictionary to store the input
+	title := req.Input.Title
+	lang := req.Input.Language
+	caption := req.Input.Captions
+	
+	placeHolders := map[string]interface{}{
+		"$$language$$": lang,
+		"$$title$$":    title,
+		"$$captions$$": caption,
+	}
+	systemPromptReplaced := replacePlaceholders(systemPrompt, placeHolders)
+	userPromptReplaced := replacePlaceholders(userPrompt, placeHolders)
+
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	req.Prompt = systemPrompt + " - " + userPrompt
+	req.Prompt = systemPromptReplaced + " - " + userPromptReplaced
 
 	// Print current prompt for debugging
-	fmt.Println("System Prompt:", systemPrompt)
-	fmt.Println("User Prompt:", userPrompt)
+	fmt.Println("System Prompt:", systemPromptReplaced)
+	fmt.Println("User Prompt:", userPromptReplaced)
 
 	resp := ResponsePayload{
 		Prompt: req.Prompt,
@@ -96,12 +110,8 @@ func summarizeHandler(w http.ResponseWriter, r *http.Request) {
 	switch req.Model {
 	case "deepseekr1":
 		// Format userPrompt with inputs
-		title := req.Input.Title
-		lang := req.Input.Language
-		caption := req.Input.Captions
-		userPromptFormatted := fmt.Sprintf(userPrompt, title, lang, caption)
 
-		summary, err := CallDeepSeek(systemPrompt, userPromptFormatted)
+		summary, err := CallDeepSeek(systemPromptReplaced, userPromptReplaced)
 		if err != nil {
 			resp.Error = err.Error()
 		} else {
@@ -110,9 +120,8 @@ func summarizeHandler(w http.ResponseWriter, r *http.Request) {
 
 	case "gemini-2.0-flash":
 		// Build Gemini prompt
-		userPromptFormatted := fmt.Sprintf(userPrompt, req.Input.Title, req.Input.Language, req.Input.Captions)
 
-		summary, err := CallGemini(systemPrompt, userPromptFormatted)
+		summary, err := CallGemini(systemPromptReplaced, userPromptReplaced)
 		if err != nil {
 			resp.Error = err.Error()
 		} else {
@@ -131,6 +140,15 @@ func summarizeHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+func replacePlaceholders(template string, placeholders map[string]interface{}) string {
+	result := template
+	for key, value := range placeholders {
+		strValue := fmt.Sprintf("%v", value) // convert interface{} to string
+		result = strings.ReplaceAll(result, key, strValue)
+	}
+	return result
 }
 
 func main() {
