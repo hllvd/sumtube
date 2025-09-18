@@ -446,6 +446,7 @@ func pushCategoryStatsToDynamoDB(data videostate.Metadata, lang string) error {
         "uploader_id":            &dynamodbtypes.AttributeValueMemberS{Value: data.UploaderID},
         "video_upload_date":      &dynamodbtypes.AttributeValueMemberS{Value: data.UploadDate}, // yt publish date
         "category":               &dynamodbtypes.AttributeValueMemberS{Value: data.Category},
+		"video_lang":             &dynamodbtypes.AttributeValueMemberS{Value: data.VideoLang},
 
         // Now stored as Maps
 		"title":   &dynamodbtypes.AttributeValueMemberS{Value: data.Title[lang]},
