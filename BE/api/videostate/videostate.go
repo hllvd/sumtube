@@ -18,7 +18,7 @@ type Metadata struct {
     Status             	  map[string]string `json:"status,omitempty"`           // multilingual
 	UploaderID            string `json:"uploader_id,omitempty"`
 	UploadDate            string `json:"video_upload_date,omitempty"`
-	ChannelID			  string `json:"channel_id,omitempty"`
+	ChannelName			  string `json:"channel_name,omitempty"`
 	ArticleUploadDateTime string `json:"article_update_datetime,omitempty"`
 	Duration              int `json:"duration,omitempty"`
 	LikeCount			  int `json:"like_count,omitempty"`
