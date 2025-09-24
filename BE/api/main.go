@@ -381,10 +381,16 @@ func pushMetadataToDynamoDB(data videostate.Metadata) error {
         "PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("VIDEO#%s", data.Vid)},
         "SK": &dynamodbtypes.AttributeValueMemberS{Value: "METADATA"},
 
-        // GSI for querying by category and LikeCount
-        "GSI1PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("LANG#%s", data.VideoLang)},
+        // GSI for querying by video asc/desc
+        "GSI1PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("VIDS#")},
         "GSI1SK": &dynamodbtypes.AttributeValueMemberS{
-            Value: fmt.Sprintf("CHANNEL_NAME#%s#CREATED#%s", data.ChannelName, dateTimeNow),
+            Value: fmt.Sprintf("MOD#%s", dateTimeNow), //  Article creation
+        },
+
+		// GSI for quering by CHAN#{Channel Name}
+        "GSI2PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("CHAN#%s", data.ChannelName)},
+        "GSI2SK": &dynamodbtypes.AttributeValueMemberS{
+            Value: fmt.Sprintf("UPL#%s", data.UploadDate), //  Video Upload
         },
 
         // Main data fields
