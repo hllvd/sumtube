@@ -118,7 +118,7 @@ func getCurrentLang(w http.ResponseWriter, r *http.Request) string {
 
 // helper to set language cookie
 func setLanguageCookie(w http.ResponseWriter, lang string) {
-    println("setLanguageCookie : ", lang)
+    println("=> setLanguageCookie : ", lang)
 	cookie := &http.Cookie{
 		Name:     "language",
 		Value:    lang,
