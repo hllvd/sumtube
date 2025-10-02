@@ -5,8 +5,12 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"sitemap-generator/dynamo"
+	sshpusher "sitemap-generator/ssh-pusher"
+
+	xmlgen "sitemap-generator/xml-generator"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/joho/godotenv"
@@ -15,10 +19,20 @@ import (
 const dynamoDBTableName = "SummarizedSubtitles"
 
 func main() {
-	// Load .env file
 	_ = godotenv.Load(".env")
 
-	fmt.Println("Region:", os.Getenv("AWS_DEFAULT_REGION"))
+	if len(os.Args) < 2 {
+		log.Fatal("Usage: go run main.go <command>, e.g., `go run main.go push-pt` or `go run main.go gen-en`")
+	}
+
+	cmd := os.Args[1] // e.g., "push-pt" or "gen-en"
+	parts := strings.SplitN(cmd, "-", 2)
+	if len(parts) != 2 {
+		log.Fatalf("Invalid command format: %s (expected <action>-<lang>)", cmd)
+	}
+
+	action := parts[0] // "push" or "gen"
+	lang := parts[1]   // "pt", "en", etc.
 
 	// Load AWS config
 	cfg, err := config.LoadDefaultConfig(context.TODO())
@@ -28,31 +42,29 @@ func main() {
 
 	client := dynamo.NewDynamoClient(cfg, dynamoDBTableName)
 
-	// first page: 100 items
-	items, lastKey, err := client.ListVideosByLang(context.TODO(), "en", 100, nil)
+	items, _, err := client.ListVideosByLang(context.TODO(), lang, 1000, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	for _, item := range items {
-		fmt.Printf("VideoID: %s | Title: %+v | Category: %s\n | Path : %s \n", item.Vid, item.Title, item.Category, item.Path)
-		// print items.LanguagesFound
-		for lang, _ := range item.LanguagesFound {
-			fmt.Printf("Language: %s\n", lang)
-		}
-		fmt.Printf("====================================")
-
+	// Generate sitemap XML
+	sitemap, err := xmlgen.BuildSitemap(items, lang)
+	if err != nil {
+		panic(err)
 	}
 
-	fmt.Println("Got", len(items), "videos")
+	switch action {
+	case "gen":
+		// just print sitemap to stdout
+		fmt.Println(sitemap)
 
-	// if more pages exist, fetch next 100
-	if len(lastKey) > 0 {
-		fmt.Println("Fetching next page...")
-		nextItems, _, err := client.ListVideosByLang(context.TODO(), "pt", 100, lastKey)
-		if err != nil {
-			log.Fatal(err)
+	case "push":
+		if err := sshpusher.PushSitemap(lang, sitemap); err != nil {
+			log.Fatalf("failed to push sitemap: %v", err)
 		}
-		fmt.Println("Next page videos:", len(nextItems))
+		fmt.Printf("✅ Successfully pushed sitemap-%s.xml to server\n", lang)
+
+	default:
+		log.Fatalf("Unknown action: %s (expected gen or push)", action)
 	}
 }

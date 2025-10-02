@@ -34,10 +34,12 @@ var allowedLanguages = map[string]bool{
 	"de": false,
 	}
 
+
+
 // Client wrapper
 type DynamoClient struct {
-	DB        *dynamodb.Client
-	TableName string
+    DB        *dynamodb.Client
+    TableName string
 }
 
 // Factory
