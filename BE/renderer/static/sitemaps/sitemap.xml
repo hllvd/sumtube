@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap>
+    <loc>https://sumtube.io/static/sitemaps/sitemap-pt.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://sumtube.io/static/sitemaps/sitemap-es.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://sumtube.io/static/sitemaps/sitemap-en.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://sumtube.io/static/sitemaps/sitemap-fr.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://sumtube.io/static/sitemaps/sitemap-it.xml</loc>
+  </sitemap>
+</sitemapindex>
