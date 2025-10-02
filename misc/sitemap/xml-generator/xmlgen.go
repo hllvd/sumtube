@@ -1,27 +1,28 @@
 package xmlgen
 
 import (
+	"bytes"
 	"encoding/xml"
 	"fmt"
 	"sitemap-generator/dynamo"
 )
 
 type UrlSet struct {
-    XMLName xml.Name `xml:"urlset"`
-    Xmlns   string   `xml:"xmlns,attr"`
-    Xhtml   string   `xml:"xmlns:xhtml,attr"`
-    Urls    []Url    `xml:"url"`
+	XMLName xml.Name `xml:"urlset"`
+	Xmlns   string   `xml:"xmlns,attr"`
+	Xhtml   string   `xml:"xmlns:xhtml,attr"`
+	Urls    []Url    `xml:"url"`
 }
 
 type Url struct {
-    Loc   string `xml:"loc"`
-    Links []Link `xml:"xhtml:link"`
+	Loc   string `xml:"loc"`
+	Links []Link `xml:"xhtml:link"`
 }
 
 type Link struct {
-    Rel      string `xml:"rel,attr"`
-    Hreflang string `xml:"hreflang,attr"`
-    Href     string `xml:"href,attr"`
+	Rel      string `xml:"rel,attr"`
+	Hreflang string `xml:"hreflang,attr"`
+	Href     string `xml:"href,attr"`
 }
 
 
@@ -32,16 +33,14 @@ func BuildSitemap(metas []dynamo.Metadata, lang string) (string, error) {
 	}
 
 	for _, m := range metas {
-		// If Path for this lang is missing, skip
+		// Skip if no path for this lang
 		path, ok := m.Path[lang]
 		if !ok {
 			continue
 		}
 
-		// Build main loc
 		loc := fmt.Sprintf("https://sumtube.io/%s/%s/%s", lang, m.Vid, path)
 
-		// Build alternates
 		var links []Link
 		for altLang := range m.LanguagesFound {
 			href := fmt.Sprintf("https://sumtube.io/%s/%s", altLang, m.Vid)
@@ -58,10 +57,16 @@ func BuildSitemap(metas []dynamo.Metadata, lang string) (string, error) {
 		})
 	}
 
-	output, err := xml.MarshalIndent(urlset, "", "  ")
-	if err != nil {
+	// Use Encoder to avoid self-closing tags
+	var buf bytes.Buffer
+	buf.WriteString(xml.Header)
+	enc := xml.NewEncoder(&buf)
+	enc.Indent("", "  ")
+	if err := enc.Encode(urlset); err != nil {
 		return "", err
 	}
+	// Ensure all tokens flushed
+	enc.Flush()
 
-	return xml.Header + string(output), nil
+	return buf.String(), nil
 }
