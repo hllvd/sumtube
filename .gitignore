@@ -30,6 +30,3 @@ Cargo.lock
 **/static/**/*.css
 **/static/**/*.map
 **/static/**/*.js
-**/static/**/*.xml
-**/static/sitemaps
-**/static/sitemaps/**
