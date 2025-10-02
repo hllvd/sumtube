@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   build: {
     // Specify output directory
-    outDir: "../static",
+    outDir: "../static/build",
     // Clean the output directory before build
     emptyOutDir: true,
     rollupOptions: {
