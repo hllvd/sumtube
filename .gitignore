@@ -16,7 +16,7 @@ Cargo.lock
 # Environment variables
 .env
 .env.*
-.xml
+
 
 # RustRover
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
@@ -30,4 +30,4 @@ Cargo.lock
 **/static/**/*.css
 **/static/**/*.map
 **/static/**/*.js
-!**/static/sitemaps/.gitkeep
+
