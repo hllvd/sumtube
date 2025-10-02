@@ -16,6 +16,12 @@ server {
         try_files $uri $uri/ =404;
     }
 
+    # Add this location block alongside your other location blocks
+    location = /sitemap.xml {
+        alias /app/static/sitemap/sitemap.xml;
+        default_type application/xml;
+    }
+
     location / {
         proxy_pass http://${RENDERER_SERVER_HOST}:${RENDERER_SERVER_PORT};
         proxy_set_header Host $host;
