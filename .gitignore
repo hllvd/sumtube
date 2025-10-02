@@ -30,5 +30,4 @@ Cargo.lock
 **/static/**/*.css
 **/static/**/*.map
 **/static/**/*.js
-**/static/sitemaps/*
 !**/static/sitemaps/.gitkeep
