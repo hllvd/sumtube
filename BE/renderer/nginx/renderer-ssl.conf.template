@@ -18,7 +18,7 @@ server {
 
     # Add this location block alongside your other location blocks
     location = /sitemap.xml {
-        alias /app/static/sitemap/sitemap.xml;
+        alias /app/static/sitemaps/sitemap.xml;
         default_type application/xml;
     }
 
@@ -38,6 +38,12 @@ server {
     location /.well-known/acme-challenge/ {
         root /app/static/;
         try_files $uri $uri/ =404;
+    }
+    
+    # Add this location block alongside your other location blocks
+    location = /sitemap.xml {
+        alias /app/static/sitemaps/sitemap.xml;
+        default_type application/xml;
     }
 
     # redirect to ssl
