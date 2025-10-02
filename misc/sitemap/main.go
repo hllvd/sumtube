@@ -60,7 +60,7 @@ func main() {
 
 	case "push":
 		if err := sshpusher.PushSitemap(lang, sitemap); err != nil {
-			log.Fatalf("Ops! :( failed to push sitemap: %v", err)
+			log.Fatalf("Ops! failed to push sitemap: %v", err)
 		}
 		fmt.Printf("✅ Successfully pushed sitemap-%s.xml to server\n", lang)
 
