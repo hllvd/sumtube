@@ -70,6 +70,7 @@ button:focus-visible {
 /** home **/
 h1.text-3xl.font-bold.main-title {
   display: block;
+  margin-right: 20px;
 }
 h1.text-3xl.font-bold.main-title:after {
   content: attr(data-content) "Sempre grátis";
@@ -90,4 +91,9 @@ h1.text-3xl.font-bold.main-title:after {
   width: 62px;
   margin-left: -9px;
   text-align: left;
+}
+
+/** article **/
+article.markdown h3 a {
+  font-weight: 700;
 }
