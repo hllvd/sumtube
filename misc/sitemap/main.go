@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"sitemap-generator/dynamo"
@@ -63,6 +64,28 @@ func main() {
 			log.Fatalf("Ops! failed to push sitemap: %v", err)
 		}
 		fmt.Printf("✅ Successfully pushed sitemap-%s.xml to server\n", lang)
+	case "copy":
+        destPath := os.Getenv("DESTINATION_PATH_LOCALLY")
+        if destPath == "" {
+            log.Fatal("DESTINATION_PATH_LOCALLY environment variable is not set")
+        }
+
+        // Ensure directory exists
+        if err := os.MkdirAll(destPath, 0755); err != nil {
+            log.Fatalf("Failed to create destination directory: %v", err)
+        }
+
+        // Create the destination file
+        filename := fmt.Sprintf("sitemap-%s.xml", lang)
+        destFile := filepath.Join(destPath, filename)
+        
+        // Write the sitemap content to the file
+        err := os.WriteFile(destFile, []byte(sitemap), 0644)
+        if err != nil {
+            log.Fatalf("Failed to write sitemap file: %v", err)
+        }
+        
+        fmt.Printf("✅ Successfully copied sitemap-%s.xml to %s\n", lang, destPath)
 
 	default:
 		log.Fatalf("Unknown action: %s (expected gen or push)", action)
