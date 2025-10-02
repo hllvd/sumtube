@@ -15,6 +15,10 @@ server {
         alias /app/static/;
         try_files $uri $uri/ =404;
     }
+    location /static/sitemaps {
+        alias /app/static/sitemaps;
+        try_files $uri $uri/ =404;
+    }
 
     # Add this location block alongside your other location blocks
     location = /sitemap.xml {
@@ -44,6 +48,10 @@ server {
     location = /sitemap.xml {
         alias /app/static/sitemaps/sitemap.xml;
         default_type application/xml;
+    }
+    location /static/sitemaps {
+        alias /app/static/sitemaps;
+        try_files $uri $uri/ =404;
     }
 
     # redirect to ssl
