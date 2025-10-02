@@ -31,3 +31,4 @@ Cargo.lock
 **/static/**/*.map
 **/static/**/*.js
 **/static/**/*.xml
+**/static/**
