@@ -43,6 +43,7 @@ var allowedLanguages = map[string]bool{
     "de": true,
     "ja": true,
     "ru": true,
+    "ar": true,
 }
 
 
@@ -788,6 +789,19 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string, video ...str
                 "you_saved": "Вы сэкономили",
                 "reading": "чтение",
             },
+            "ja": {
+                "title": "YouTube動画をAIで無料要約 | Sumtube.io",
+                "meta_description": "任意のYouTubeリンクを貼り付けるだけで、迅速で明確、そして無料のAI要約を取得できます。常に無料。",
+                "always_free": "常に無料",
+                "nav_login": "ログイン",
+                "heading": "あらゆるYouTube動画を要約",
+                "subheading": "迅速で明確、そして常に無料の要約で時間を節約",
+                "description": "Sumtube.ioは、長いYouTube動画を迅速で明確な要約に変える無料ツールです。動画リンクを貼り付けるだけで、数秒でAI生成の要約を取得できます。学生、専門家、そして知識を素早く得たい好奇心旺盛な学習者に最適です。しかも最大の魅力は：常に無料であることです。",
+                "footer_copyright": "© 2025 YouTube要約ツール. 無断転載を禁じます。",
+                "title_blog": "動画要約",
+                "you_saved": "節約できた時間",
+                "reading": "読書",
+            },
             "de": {
                 "title": "YouTube-Videos kostenlos mit KI zusammenfassen | Sumtube.io",
                 "meta_description": "Fügen Sie einen beliebigen YouTube-Link ein und erhalten Sie eine schnelle, klare und kostenlose Zusammenfassung mit KI. Immer kostenlos.",
@@ -952,6 +966,26 @@ func formatDate(lang, dateStr string) string {
 			"Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"}
 		monthName = months[monthInt]
 		return fmt.Sprintf("%s %s %s", day, monthName, year)
+    case "ar":
+        months := []string{"", "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
+            "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"}
+        monthName = months[monthInt]
+        return fmt.Sprintf("%s %s %s", day, monthName, year)
+    case "ru":
+        months := []string{"", "января", "февраля", "марта", "апреля", "мая", "июня",
+            "июля", "августа", "сентября", "октября", "ноября", "декабря"}
+        monthName = months[monthInt]
+        return fmt.Sprintf("%s %s %s", day, monthName, year)
+    case "de":
+        months := []string{"", "Januar", "Februar", "März", "April", "Mai", "Juni",
+            "Juli", "August", "September", "Oktober", "November", "Dezember"}
+        monthName = months[monthInt]
+        return fmt.Sprintf("%s. %s %s", day, monthName, year)
+    case "ja":
+        months := []string{"", "1月", "2月", "3月", "4月", "5月", "6月",
+            "7月", "8月", "9月", "10月", "11月", "12月"}
+        monthName = months[monthInt]
+        return fmt.Sprintf("%s年 %s %s日", year, monthName, day)
 	default: // en
 		months := []string{"", "January", "February", "March", "April", "May", "June",
 			"July", "August", "September", "October", "November", "December"}
