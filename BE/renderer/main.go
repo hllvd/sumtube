@@ -35,13 +35,16 @@ func NewLoadController() *LoadController {
 }
 
 var allowedLanguages = map[string]bool{
-	"en": true,
-	"pt": true,
-	"es": true,
-	"it": true,
-	"fr": true,
-	"de": true,
+    "en": true,
+    "pt": true,
+    "es": true,
+    "it": true,
+    "fr": true,
+    "de": true,
+    "ja": true,
+    "ru": true,
 }
+
 
 func extractLang(path string) (string, bool) {
 	trimmed := strings.Trim(path, "/")

@@ -26,12 +26,14 @@ type Metadata struct {
 }
 
 var allowedLanguages = map[string]bool{
-	"en": false,
-	"pt": false,
-	"es": false,
-	"it": false,
-	"fr": false,
-	"de": false,
+    "en": true,
+    "pt": true,
+    "es": true,
+    "it": true,
+    "fr": true,
+    "de": true,
+    "ja": true,
+    "ru": true,
 	}
 
 
