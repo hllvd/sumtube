@@ -6,7 +6,13 @@ go run main.go copy-pt && \
 go run main.go copy-en && \
 go run main.go copy-es && \
 go run main.go copy-fr && \
-go run main.go copy-it
+go run main.go copy-it && \
+go run main.go copy-de && \
+go run main.go copy-ru && \
+go run main.go copy-ar && \
+go run main.go copy-ja && \
+go run main.go copy-zh && \
+go run main.go copy-ko
 
 # 2. Add ONLY sitemap files
 echo "🔄 Adding sitemap files..."

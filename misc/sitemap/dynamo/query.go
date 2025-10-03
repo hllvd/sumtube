@@ -34,6 +34,9 @@ var allowedLanguages = map[string]bool{
     "de": true,
     "ja": true,
     "ru": true,
+    "ar": true,
+    "zh": true,
+    "ko": true,
 	}
 
 

@@ -44,6 +44,8 @@ var allowedLanguages = map[string]bool{
     "ja": true,
     "ru": true,
     "ar": true,
+    "zh": true,
+    "ko": true,
 }
 
 
@@ -814,7 +816,34 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string, video ...str
                 "title_blog": "Video-Zusammenfassung",
                 "you_saved": "Sie haben gespart",
                 "reading": "Lesen",
-            },            
+            },
+            "zh": {
+                "title": "使用 AI 免费总结 YouTube 视频 | Sumtube.io",
+                "meta_description": "粘贴任意 YouTube 链接，即可获得快速、清晰且免费的 AI 生成摘要。始终免费。",
+                "always_free": "始终免费",
+                "nav_login": "登录",
+                "heading": "总结任何 YouTube 视频",
+                "subheading": "使用快速、清晰且始终免费的摘要节省时间",
+                "description": "Sumtube.io 是一款免费工具，可将冗长的 YouTube 视频快速转换为清晰的摘要。只需粘贴视频链接，即可在几秒钟内获得 AI 生成的摘要。非常适合学生、专业人士以及希望更快获取知识的好奇学习者 —— 最棒的是：它始终免费。",
+                "footer_copyright": "© 2025 YouTube 摘要器. 保留所有权利。",
+                "title_blog": "视频摘要",
+                "you_saved": "您节省了",
+                "reading": "阅读",
+            },
+            
+            "ko": {
+                "title": "AI로 YouTube 동영상 무료 요약 | Sumtube.io",
+                "meta_description": "YouTube 링크를 붙여넣으면 빠르고 명확하며 무료로 AI 요약을 받을 수 있습니다. 항상 무료.",
+                "always_free": "항상 무료",
+                "nav_login": "로그인",
+                "heading": "모든 YouTube 동영상 요약",
+                "subheading": "빠르고 명확하며 항상 무료인 요약으로 시간을 절약하세요",
+                "description": "Sumtube.io는 긴 YouTube 동영상을 빠르고 명확한 요약으로 바꾸는 무료 도구입니다. 동영상 링크를 붙여넣기만 하면 몇 초 만에 AI가 생성한 요약을 받을 수 있습니다. 학생, 전문가, 지식을 더 빨리 얻고자 하는 호기심 많은 학습자에게 적합합니다 — 그리고 최고의 장점: 항상 무료입니다.",
+                "footer_copyright": "© 2025 YouTube 요약기. 모든 권리 보유.",
+                "title_blog": "동영상 요약",
+                "you_saved": "절약한 시간",
+                "reading": "읽기",
+            },                  
             
         }
         
@@ -986,6 +1015,16 @@ func formatDate(lang, dateStr string) string {
             "7月", "8月", "9月", "10月", "11月", "12月"}
         monthName = months[monthInt]
         return fmt.Sprintf("%s年 %s %s日", year, monthName, day)
+    case "zh":
+        months := []string{"", "1月", "2月", "3月", "4月", "5月", "6月",
+            "7月", "8月", "9月", "10月", "11月", "12月"}
+        monthName = months[monthInt]
+        return fmt.Sprintf("%s年%s%s日", year, monthName, day)
+    case "ko":
+        months := []string{"", "1월", "2월", "3월", "4월", "5월", "6월",
+            "7월", "8월", "9월", "10월", "11월", "12월"}
+        monthName = months[monthInt]
+        return fmt.Sprintf("%s년 %s %s일", year, monthName, day)
 	default: // en
 		months := []string{"", "January", "February", "March", "April", "May", "June",
 			"July", "August", "September", "October", "November", "December"}
