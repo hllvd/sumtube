@@ -39,7 +39,7 @@ jobs:
         with:
           host: ${{ vars.VPS_HOST }}
           username: ${{ vars.VPS_USER }}
-          key_path: ~/.ssh/id_ed25519
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
             echo "✅ Connected to VPS"
