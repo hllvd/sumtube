@@ -19,9 +19,12 @@ jobs:
         env:
           HOST: ${{ vars.VPS_HOST }}
           USER: ${{ vars.VPS_USER }}
-          PASSWORD: ${{ secrets.VPS_SSH_PASSWORD }}
         run: |
-          sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no $USER@$HOST << 'EOF'
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 $HOST >> ~/.ssh/known_hosts
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no $USER@$HOST << 'EOF'
             echo "✅ Connected to VPS with password"
             cd /home/$USER/sumtube
             git pull origin main
