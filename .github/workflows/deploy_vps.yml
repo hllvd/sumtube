@@ -12,32 +12,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up SSH
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          HOST: ${{ vars.VPS_HOST }}
-          USER: ${{ vars.VPS_USER }}
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY_B64 }}" | base64 --decode > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H $HOST >> ~/.ssh/known_hosts
-
-      - name: Debug SSH key
-        run: |
-          head -n 5 ~/.ssh/id_ed25519
-          tail -n 3 ~/.ssh/id_ed25519
-
-      - name: Deploy to VPS
-        env:
-          HOST: ${{ vars.VPS_HOST }}
-          USER: ${{ vars.VPS_USER }}
-        run: |
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes $USER@$HOST << 'EOF'
+      - name: Test appleboy
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ vars.VPS_HOST }}
+          username: ${{ vars.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            whoami
+            ls -al
             echo "✅ Connected to VPS"
             cd /home/$USER/sumtube
             git pull origin main
             cd BE
             chmod +x start.sh
             ./start.sh up
-          EOF
