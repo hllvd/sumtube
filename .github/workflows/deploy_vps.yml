@@ -11,11 +11,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-    - name: Decode SSH key
-      run: |
-        mkdir -p ~/.ssh
-        printf '%s' "${{ secrets.SSH_PRIVATE_KEY_B64 }}" | base64 --decode > ~/.ssh/id_ed25519
-        chmod 600 ~/.ssh/id_ed25519
+      - name: Decode SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s' "${{ secrets.SSH_PRIVATE_KEY_B64 }}" | base64 --decode > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
 
       - name: Debug SSH key
         run: |
