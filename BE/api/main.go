@@ -67,13 +67,18 @@ var googleOAuthConfig = &oauth2.Config{
 
 const tempDir = "/tmp"
 const bucketName = "sumtube"
-const dynamoDBTableName = "SummarizedSubtitles"
+var dynamoDBTableName = os.Getenv("DYNAMODB_TABLE_NAME")
+
+
 
 var s3Client *s3.Client
 var dynamoDBClient *dynamodb.Client
 
 func init() {
 	fmt.Println("Initializing AWS SDK...")
+	if dynamoDBTableName == "" {
+		log.Println("Please add DYNAMODB_TABLE_NAME to .env file")
+	}
 	cfg, err := config.LoadDefaultConfig(context.Background(),
 		config.WithRegion("us-east-1"),
 	)

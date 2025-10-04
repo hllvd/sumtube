@@ -17,10 +17,15 @@ import (
 	"github.com/joho/godotenv"
 )
 
-const dynamoDBTableName = "SummarizedSubtitles"
+
+var dynamoDBTableName = os.Getenv("DYNAMODB_TABLE_NAME")
 
 func main() {
 	_ = godotenv.Load(".env")
+
+	if dynamoDBTableName == "" {
+		log.Println("Please add DYNAMODB_TABLE_NAME to .env file")
+	}
 
 	if len(os.Args) < 2 {
 		log.Fatal("Usage: go run main.go <command>, e.g., `go run main.go push-pt` or `go run main.go gen-en`")
