@@ -591,7 +591,7 @@ func router(w http.ResponseWriter, r *http.Request) {
             redirectURL := &url.URL{
                 Path:     newPath,
             }
-            http.Redirect(w, r, redirectURL.String(), http.StatusMovedPermanently)
+            http.Redirect(w, r, redirectURL.String(), http.StatusFound)
         case HOME:
             println("case HOME", lang, videoId)
             setLanguageCookie(w, lang)
