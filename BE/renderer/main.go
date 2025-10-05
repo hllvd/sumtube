@@ -549,7 +549,7 @@ func router(w http.ResponseWriter, r *http.Request) {
     switch routeType {
         case BLOG_TEMPLATE:
             println("case BLOG_TEMPLATE")
-            setLanguageCookie(w, lang)
+            //setLanguageCookie(w, lang)
             loadBlog(w, r, lang, title, videoId)
         
         case REDIRECT_BLOG_RETURN_HOME:
@@ -586,15 +586,15 @@ func router(w http.ResponseWriter, r *http.Request) {
             }
             http.Redirect(w, r, redirectURL.String(), http.StatusMovedPermanently)
         case REDIRECT_HOME:
-            println("case REDIRECT_HOME")
-            newPath := fmt.Sprintf("/%s", lang)
-            redirectURL := &url.URL{
-                Path:     newPath,
-            }
-            http.Redirect(w, r, redirectURL.String(), http.StatusFound)
+            // println("case REDIRECT_HOME")
+            // newPath := fmt.Sprintf("/%s", lang)
+            // redirectURL := &url.URL{
+            //     Path:     newPath,
+            // }
+            // http.Redirect(w, r, redirectURL.String(), http.StatusFound)
         case HOME:
             println("case HOME", lang, videoId)
-            setLanguageCookie(w, lang)
+            // setLanguageCookie(w, lang)
             loadIndex(w, r, lang, videoId)
         default:
             http.Error(w, "Invalid route", http.StatusNotFound)
