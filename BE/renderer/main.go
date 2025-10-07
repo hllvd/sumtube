@@ -75,7 +75,8 @@ type MetadataSingleLanguage struct {
 	Category              string `json:"category,omitempty"`
     Summary            	  string `json:"content,omitempty"`           
     Answer                string `json:"answer,omitempty"`           
-    Path               	  string `json:"path,omitempty"`              
+    Path               	  string `json:"path,omitempty"`
+    Paths                 map[string]string `json:"paths,omitempty"`              
     Status             	  string `json:"status,omitempty"`            
 	UploaderID            string `json:"uploader_id,omitempty"`
 	UploadDate            string `json:"video_upload_date,omitempty"`
@@ -900,6 +901,18 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
     answer := result.Answer
     contentTitle := result.Title
     uploaderId := result.UploaderID
+    paths := make(map[string]string)
+
+    // Create link hreflang
+    for key, value := range result.Paths {
+        hreflang := "" 
+        if (lang == key){
+            hreflang = "x-default"
+        }else {
+            hreflang = key
+        }
+        paths[hreflang] = value
+    }
 
     durationInt := (result.Duration)/60
 
@@ -924,6 +937,7 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
     data := struct {
         Language             string
         Path                 string
+        Paths                map[string]string
         ApiUrl               string
         BaseUrl              string
         VideoId              string
@@ -941,6 +955,7 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
     }{
         Language:             lang,
         Path:                 r.URL.Path,
+        Paths:                paths,
         ApiUrl:               os.Getenv("SUMTUBE_API"),
         BaseUrl:              os.Getenv("BASE_URL"),
         VideoId:              videoId,
