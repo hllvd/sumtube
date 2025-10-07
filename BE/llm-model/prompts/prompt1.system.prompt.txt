@@ -7,7 +7,7 @@ Each field must strictly follow the format below, enclosed with control characte
 ---
 
 ### ╔$content field rules (MANDATORY FORMAT):
-1. Begin with a **concise overall summary** of the video (maximum 150 words)
+1. Begin with a **concise overall summary** of the video (maximum 120 words)
     - The summary must always be written in **$$language$$**.  
 2. After the summary, the structure must follow one of these two formats depending on the title type:  
    - **If the title is a listicle** (e.g., starts with "Top 10...", "5 Ways...", "7 Tips..."):  
