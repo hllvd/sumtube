@@ -850,6 +850,7 @@ type HandleSummarySingleLanguageRequestResponse struct {
 	VideoID      	string  `json:"videoId"`
 	Title        	string  `json:"title"`
 	Path 		 	string  `json:"path"`
+	Paths			map[string]string	`json:"paths"`
 	Content	     	string	`json:"content"`
 	Answer	     	string	`json:"answer"`
 	Status       	string  `json:"status"`
@@ -1197,9 +1198,18 @@ func dump_print_all_videos(){
 }
 
 func convertMultilingualToSingleLingual(multilingual *HandleSummaryRequestResponse, language string) *HandleSummarySingleLanguageRequestResponse {
+	urls := make(map[string]string)
+	sumtubeBaseUrl := os.Getenv("BASE_URL")
+	// Loop through the map and convert each value
+	for key, value := range multilingual.Path {
+		// Convert the value to a string and append it to the new map
+		urls[key] = fmt.Sprintf("%s/%s/%s", sumtubeBaseUrl, key,value)
+	}
+	
 	return &HandleSummarySingleLanguageRequestResponse{
 		VideoID:		    multilingual.VideoID,
 		Path: 				multilingual.Path[language],
+		Paths:				urls,
 		Title: 				multilingual.Title[language],
 		Answer: 			multilingual.Answer[language],
 		Content: 			multilingual.Content[language],
