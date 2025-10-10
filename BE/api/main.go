@@ -1201,9 +1201,9 @@ func convertMultilingualToSingleLingual(multilingual *HandleSummaryRequestRespon
 	urls := make(map[string]string)
 	sumtubeBaseUrl := os.Getenv("BASE_URL")
 	// Loop through the map and convert each value
-	for key, value := range multilingual.Path {
+	for key, _ := range multilingual.Path {
 		// Convert the value to a string and append it to the new map
-		urls[key] = fmt.Sprintf("%s/%s/%s", sumtubeBaseUrl, key,value)
+		urls[key] = fmt.Sprintf("%s/%s/%s", sumtubeBaseUrl, key, multilingual.VideoID)
 	}
 	
 	return &HandleSummarySingleLanguageRequestResponse{
