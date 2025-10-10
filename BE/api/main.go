@@ -1066,6 +1066,42 @@ func processingQueueVideoGetMetadata(params MetadataParams) (
 	return metadataDynamoResponse, fetchMetadataResponse, nil
 }
 
+func processingQueueVideoDownloadCaps(videoId string,language string, videoProcessingMetadataDTO videostate.ProcessingVideo ) videostate.ProcessingVideo{
+	
+	metadata := videoQueue.GetVideoMeta(videoId, language)
+			
+	// Download Caps
+	log.Println("⏳ => Download Caps", videoId)
+	downloadUrl := metadata.DownSubDownloadCap
+	subtitle, err := downloadSubtitleByDownSub(downloadUrl)
+	if (err != nil) {
+		log.Printf("❌ Failed to download subtitle: %v", err)
+		time.Sleep(1 * time.Second)
+		return videoProcessingMetadataDTO
+	}
+	
+	videoProcessingMetadataDTO = videostate.ProcessingVideo{
+		VideoID: videoId,
+		Language: language,
+		SubtitleContent: subtitle,
+	}
+	
+	videoQueue.Add(videoProcessingMetadataDTO)
+	log.Println("🔄 Update metadata on to include DownSubDownloadCap")
+
+	log.Println("[2] Set Status ", videostate.StatusDownloadProcessed)
+	videoQueue.SetStatus(videoId, language, videostate.StatusDownloadProcessed)
+
+	go func(){
+		subtitleKey := videoId + "-caption.txt"
+		if err := uploadToS3(subtitle, subtitleKey); err != nil {
+			log.Printf("Error uploading subtitle to S3: %v\n", err)
+		}
+	}()
+
+	return videoProcessingMetadataDTO
+}
+
 
 func processingVideoQueue(videoId string, language string) {
 	ttl := 3
@@ -1138,37 +1174,7 @@ func processingVideoQueue(videoId string, language string) {
 
 		println(">>>>>>>> BEFORE Download")
 		if (videoQueue.GetStatus(videoId, language) == videostate.StatusMetadataProcessed){
-
-			metadata := videoQueue.GetVideoMeta(videoId, language)
-			
-			// Download Caps
-			log.Println("⏳ => Download Caps", videoId)
-			downloadUrl := metadata.DownSubDownloadCap
-			subtitle, err := downloadSubtitleByDownSub(downloadUrl)
-			if (err != nil) {
-				log.Printf("❌ Failed to download subtitle: %v", err)
-				time.Sleep(1 * time.Second)
-				continue
-			}
-			
-			videoProcessingMetadataDTO = videostate.ProcessingVideo{
-				VideoID: videoId,
-				Language: language,
-				SubtitleContent: subtitle,
-			}
-			
-			videoQueue.Add(videoProcessingMetadataDTO)
-			log.Println("🔄 Update metadata on to include DownSubDownloadCap")
-
-			log.Println("[2] Set Status ", videostate.StatusDownloadProcessed)
-			videoQueue.SetStatus(videoId, language, videostate.StatusDownloadProcessed)
-
-			go func(){
-				subtitleKey := videoId + "-caption.txt"
-				if err := uploadToS3(subtitle, subtitleKey); err != nil {
-					log.Printf("Error uploading subtitle to S3: %v\n", err)
-				}
-			}()
+			videoProcessingMetadataDTO = processingQueueVideoDownloadCaps(videoId, language, videoProcessingMetadataDTO)
 		}
 		
 		println(">>>>>>>> BEFORE Summarize")
@@ -1266,7 +1272,7 @@ func convertMultilingualToSingleLingual(multilingual *HandleSummaryRequestRespon
 		UploadDate:         multilingual.UploadDate,   
 		ArticleUploadDateTime: multilingual.ArticleUploadDateTime,
 		Duration:           multilingual.Duration,
-		ChannelName:          multilingual.ChannelName,
+		ChannelName:        multilingual.ChannelName,
 		Category:           multilingual.Category,
 		VideoLang:          multilingual.VideoLang,
 		LikeCount:          multilingual.LikeCount,
@@ -1386,10 +1392,10 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// print all videos from videoQueue.Videos()
-	println("⌛ [2] Printing all videos from videoQueue.Videos()")
-	for _, video := range videoQueue.Videos() {
-		println("[2] ===> VideoID: ", video.VideoID, " Language: ", video.Language, " Status: ", video.Status)
-	}
+	// println("⌛ [2] Printing all videos from videoQueue.Videos()")
+	// for _, video := range videoQueue.Videos() {
+	// 	println("[2] ===> VideoID: ", video.VideoID, " Language: ", video.Language, " Status: ", video.Status)
+	// }
 	
 	currentMetadata := videoQueue.GetVideoMeta(videoID, lang)
 	
