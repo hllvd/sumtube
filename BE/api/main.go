@@ -969,15 +969,116 @@ func loadContentWhenItsCached(videoID string, lang string) (videostate.Metadata,
 	return metadata, nil
 }
 
+type MetadataParams struct {
+    VideoID                   string
+    Language                  string
+    MetadataDynamoResponse   *HandleSummaryRequestResponse
+    FetchMetadataResponse    *VideoMetadata
+}
+func processingQueueVideoGetMetadata(params MetadataParams) (
+	*HandleSummaryRequestResponse,
+	*VideoMetadata,
+	error,
+) {
+	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", params.VideoID)
+	var videoProcessingMetadataDTO = videostate.ProcessingVideo{
+		VideoID:  params.VideoID,
+		Language: params.Language,
+	}
+
+	ttlMetadata := videoQueue.GetTTLMetadata(params.VideoID, params.Language)
+	println("GET METADATA TTL", ttlMetadata)
+	if ttlMetadata < 1 {
+		videoQueue.SetStatus(params.VideoID, params.Language, videostate.StatusMetadataTTlExceeded)
+
+		go func() {
+			var metadata = videoQueue.GetVideoMeta(params.VideoID, params.Language)
+			metadata.Vid = params.VideoID
+			metadata.Lang = params.Language
+			if err := pushMetadataToDynamoDB(*metadata); err != nil {
+				log.Printf("❌ Failed to push metadata to DynamoDB: %v", err)
+			} else {
+				log.Printf("✅ Pushed expired metadata from %s to DynamoDB", params.VideoID)
+			}
+		}()
+		return nil, nil, fmt.Errorf("ttlMetadata < 1")
+	}
+
+	// Fetch Metadata
+	log.Println("⏳ => Fetching Metadata", params.VideoID)
+	metadataDynamoResponse, fetchMetadataResponse, err :=
+		runMetadataAndCapsFetcherAsync(videoURL, params.Language)
+	log.Println("after runMetadataAndCapsFetcherAsync")
+
+	if err != nil {
+		log.Printf("❌ Failed to run metadata fetch after retry: %v", err)
+		time.Sleep(1 * time.Second)
+		return nil, nil, err
+	}
+
+	if fetchMetadataResponse.Category == "" {
+		log.Printf("❌ [0] No category found for video %s", params.VideoID)
+		time.Sleep(1 * time.Second)
+		return nil, nil, fmt.Errorf("no category found")
+	}
+
+	log.Println("before convertHandleSummary")
+	videoMetadata := convertHandleSummaryRequestResponseToVideoStateMetadata(metadataDynamoResponse)
+	log.Println("after convertHandleSummary")
+
+	videoProcessingMetadataDTO.Metadata = videoMetadata
+
+	if len(fetchMetadataResponse.Captions) == 0 {
+		log.Printf("❌ No captions found for video %s", params.VideoID)
+		time.Sleep(1 * time.Second)
+		return nil, nil, fmt.Errorf("no captions found")
+	}
+
+	downSubUrl := fetchMetadataResponse.Captions[0].BaseURL
+	videoProcessingMetadataDTO.Metadata.DownSubDownloadCap = downSubUrl
+
+	path := convertTitleToURL(videoMetadata.Title[params.Language])
+	if videoProcessingMetadataDTO.Metadata.Path == nil {
+		videoProcessingMetadataDTO.Metadata.Path = make(map[string]string)
+	}
+	videoProcessingMetadataDTO.Metadata.Path[params.Language] = path
+
+	log.Println("🔄 Update metadata on videoProcessing:", params.VideoID)
+	videoQueue.Add(videoProcessingMetadataDTO)
+
+	log.Println("[1] Set Status", videostate.StatusMetadataProcessed)
+	videoQueue.SetStatus(params.VideoID, params.Language, videostate.StatusMetadataProcessed)
+
+	go func() {
+		metadata := videoQueue.GetVideoMeta(params.VideoID, params.Language)
+		if metadata.Category == "" {
+			log.Printf("❌ [2] No category found for video %s", params.VideoID)
+			time.Sleep(1 * time.Second)
+		} else {
+			println("🔄 [2] printing category:", videoMetadata.Category)
+		}
+
+		if err := pushMetadataToDynamoDB(*metadata); err != nil {
+			log.Printf("❌ Failed to push metadata to DynamoDB: %v", err)
+		}
+	}()
+
+	return metadataDynamoResponse, fetchMetadataResponse, nil
+}
+
+
 func processingVideoQueue(videoId string, language string) {
 	ttl := 3
-	videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoId)
+	//videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoId)
 	var metadataDynamoResponse *HandleSummaryRequestResponse
 	var fetchMetadataResponse *VideoMetadata
 	var videoProcessingMetadataDTO = videostate.ProcessingVideo{
 		VideoID: videoId,
 		Language: language,
 	}
+
+	// direct-video-digest or download-and-digest
+	var summaryType = videoQueue.GetSummaryType(videoId, language)
 
 	videoQueue.SetTTLMetadata(videoId, language, ttl)
 	
@@ -1009,83 +1110,28 @@ func processingVideoQueue(videoId string, language string) {
 		}
 		println("[1] Video Status : ", videoQueue.GetStatus(videoId, language))
 		
+
+		// direct-video-digest or download-and-digest
+		if (summaryType == ""){
+
+		}
+		
 		//Metadata Handler
 		println(">>>>>>>>>>> BEFORE Fetch metadata")
 		if (videoQueue.GetStatus(videoId, language) == videostate.StatusPending){
 			videoQueue.DecreaseTTLMetadata(videoId, language)
-			
-			ttlMetadata := videoQueue.GetTTLMetadata(videoId, language)
-			println("GET METADATA TTL", ttlMetadata)
-			if (ttlMetadata < 1) {
-				videoQueue.SetStatus(videoId, language, videostate.StatusMetadataTTlExceeded)
-
-				go func(){
-					var metadata = videoQueue.GetVideoMeta(videoId, language)
-					metadata.Vid = videoId
-					metadata.Lang = language
-					if err := pushMetadataToDynamoDB(*metadata); err != nil {
-						log.Printf("❌ Failed to push metadata to DynamoDB: %v", err)
-					}else{
-						log.Printf("Push error data from %s to DynamoDB", videoId)
-					}
-				}()
-				break
+			params := MetadataParams{
+				VideoID:                videoId,
+				Language:               language,
+				MetadataDynamoResponse: metadataDynamoResponse,
+				FetchMetadataResponse:  fetchMetadataResponse,
 			}
-			
-			// Fetch Metadata
-			log.Println("⏳ => Fetching Metadata ", videoId)
 			var err error
-			metadataDynamoResponse, fetchMetadataResponse, err = runMetadataAndCapsFetcherAsync(videoURL, language)
-			log.Println("after runMetadataAndCapsFetcherAsync ")
+			metadataDynamoResponse, fetchMetadataResponse, err = processingQueueVideoGetMetadata(params)
+
 			if err != nil {
-				log.Printf("❌ Failed to run metadata fetch after retry: %v", err)
-				time.Sleep(1 * time.Second)
-				continue
+				break;
 			}
-
-			if fetchMetadataResponse.Category == "" {
-				log.Printf("❌ [0] No category found for video %s", videoId)
-				time.Sleep(1 * time.Second)
-				continue
-			}
-			log.Println("before convertHandleSummary")
-			var videoMetadata = convertHandleSummaryRequestResponseToVideoStateMetadata(metadataDynamoResponse)
-			log.Println("after convertHandleSummary")
-			videoProcessingMetadataDTO.Metadata = videoMetadata
-	
-			if len(fetchMetadataResponse.Captions) == 0 {
-				log.Printf("❌ No captions found for video %s", videoId)
-				time.Sleep(1 * time.Second)
-				continue
-			}
-			var downSubUrl = fetchMetadataResponse.Captions[0].BaseURL
-			videoProcessingMetadataDTO.Metadata.DownSubDownloadCap = downSubUrl
-
-			var path = convertTitleToURL(videoMetadata.Title[language])
-			if videoProcessingMetadataDTO.Metadata.Path == nil {
-				videoProcessingMetadataDTO.Metadata.Path = make(map[string]string)
-			}
-			videoProcessingMetadataDTO.Metadata.Path[language] = path
-			
-			log.Println("🔄 Update metadata on videoProcessing : ", videoId)
-			videoQueue.Add(videoProcessingMetadataDTO)
-
-			log.Println("[1] Set Status ", videostate.StatusMetadataProcessed)
-			videoQueue.SetStatus(videoId, language, videostate.StatusMetadataProcessed)
-
-			go func(){
-				var metadata = videoQueue.GetVideoMeta(videoId, language)
-				if metadata.Category == "" {
-					log.Printf("❌ [2] No category found for video %s", videoId)
-					time.Sleep(1 * time.Second)
-				}else{
-					println("🔄 [2] printing category : ", videoMetadata.Category)
-				}
-
-				if err := pushMetadataToDynamoDB(*metadata); err != nil {
-					log.Printf("❌ Failed to push metadata to DynamoDB: %v", err)
-				}
-			}()
 		}
 		// Check the status
 		println("[1] GET Status: ", videoQueue.GetStatus(videoId, language))
@@ -1186,6 +1232,7 @@ func processingVideoQueue(videoId string, language string) {
 		// Check the status
 		println("Final GET Status: ", videoQueue.GetStatus(videoId, language))
 		time.Sleep(1 * time.Second)
+		videoQueue.DecreaseTTLMetadata(videoId, language)
 		ttl--
 	}
 }
@@ -1203,7 +1250,7 @@ func convertMultilingualToSingleLingual(multilingual *HandleSummaryRequestRespon
 	// Loop through the map and convert each value
 	for key, value := range multilingual.Path {
 		// Convert the value to a string and append it to the new map
-		urls[key] = fmt.Sprintf("%s/%s/%s", sumtubeBaseUrl, key,value)
+		urls[key] = fmt.Sprintf("%s/%s/%s", sumtubeBaseUrl, multilingual.VideoID,value)
 	}
 	
 	return &HandleSummarySingleLanguageRequestResponse{
@@ -1232,6 +1279,16 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+	// get prompt http://localhost:8080/summary/{type} it could be direct-video-digest or download-and-digest
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 3 {
+		http.Error(w, "missing type", http.StatusBadRequest)
+		return
+	}
+
+	fragmentType := parts[2]
+
+
     // Parse URL query parameters
     //queryParams := r.URL.Query()
     // := queryParams.Get("force") == "true"
@@ -1257,12 +1314,12 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         http.Error(w, fmt.Sprintf("Error extracting video ID: %v", err), http.StatusBadRequest)
         return
     }
+
+	videoQueue.SetSummaryType(videoID, lang, fragmentType)
+
 	println("videoQueue.Exists")
 	if (videoQueue.Exists(videoID, lang) == false) {
-		
-		println("Video does not exist on queue", videoQueue.Exists(videoID, lang))
-		dump_print_all_videos()
-		println("dump_print_all_videos 2")
+		//dump_print_all_videos()
 	    
 		videoProcessingMetadataDTO := videostate.ProcessingVideo{
 			VideoID: videoID,
@@ -1679,6 +1736,7 @@ func main() {
     // Create your router
     mux := http.NewServeMux()
     mux.HandleFunc("/summary", handleSummaryRequest)
+	mux.HandleFunc("/summary/", handleSummaryRequest)
     mux.HandleFunc("/redirects", handleGoogleRedirect)
 	mux.HandleFunc("/summary/category", handleCategorySummaryRequest) // New endpoint
     mux.HandleFunc("/login", handleGoogleLogin)
