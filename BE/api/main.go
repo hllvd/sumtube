@@ -1102,6 +1102,63 @@ func processingQueueVideoDownloadCaps(videoId string,language string, videoProce
 	return videoProcessingMetadataDTO
 }
 
+func processingQueueVideoSummarize(videoId string, language string, videoProcessingMetadataDTO videostate.ProcessingVideo) videostate.ProcessingVideo{
+	log.Println("⏳ => Summarize it", videoId)
+	var metadata = videoQueue.GetVideoMeta(videoId, language)
+	var subtitle = videoProcessingMetadataDTO.SubtitleContent
+	if (subtitle == "") {
+		log.Println("NO SUbtitle found")
+		subtitleKey := videoId + "-caption.txt"
+		subtitle, _ = fetchS3(subtitleKey)
+	}
+
+	// set the same title for other languages
+	// here is where we can translate the title so the path would be translated as well.
+	title := firstNonEmptyFromMap(metadata.Title)
+	metadata.Title[language] = title
+
+	var path = convertTitleToURL(metadata.Title[language])
+	if metadata.Path == nil {
+		metadata.Path = make(map[string]string)
+	}
+	metadata.Path[language] = path
+	
+	summaryJson, err := summarizeSubtitle(subtitle, language, metadata.Title[language])
+	if (err != nil) {
+		log.Printf("❌ Failed to summarize subtitle: %v", err)
+		time.Sleep(1 * time.Second)
+		return videoProcessingMetadataDTO
+	}
+	if metadata.Answer== nil {
+		metadata.Answer = make(map[string]string)
+	}
+	metadata.Answer[language] = summaryJson.Answer
+
+	if metadata.Summary == nil {
+		metadata.Summary = make (map[string]string)
+	}
+	metadata.Summary[language] = summaryJson.Content
+
+	videoProcessingMetadataDTO.Metadata = *metadata
+	videoQueue.Add(videoProcessingMetadataDTO)
+
+	log.Println("🚀 [2] Set Status ", videostate.StatusSummarizeProcessed)
+	videoQueue.SetStatus(videoId, language, videostate.StatusSummarizeProcessed)
+
+	go func(){
+		var metadata = videoQueue.GetVideoMeta(videoId, language)
+		if err := pushMetadataToDynamoDB(*metadata); err != nil {
+			log.Printf("❌ Failed to push metadata to DynamoDB: %v", err)
+		}else{
+			if err := pushCategoryStatsToDynamoDB(*metadata, language); err != nil{
+				log.Printf("❌ Failed to push category to DynamoDB: %v", err)
+			}
+		}
+	}()
+
+	return videoProcessingMetadataDTO
+}
+
 
 func processingVideoQueue(videoId string, language string) {
 	ttl := 3
@@ -1179,60 +1236,7 @@ func processingVideoQueue(videoId string, language string) {
 		
 		println(">>>>>>>> BEFORE Summarize")
 		if (videoQueue.GetStatus(videoId, language) == videostate.StatusDownloadProcessed){
-
-			log.Println("⏳ => Summarize it", videoId)
-			var metadata = videoQueue.GetVideoMeta(videoId, language)
-			var subtitle = videoProcessingMetadataDTO.SubtitleContent
-			if (subtitle == "") {
-				log.Println("NO SUbtitle found")
-				subtitleKey := videoId + "-caption.txt"
-				subtitle, _ = fetchS3(subtitleKey)
-			}
-
-			// set the same title for other languages
-			// here is where we can translate the title so the path would be translated as well.
-			title := firstNonEmptyFromMap(metadata.Title)
-			metadata.Title[language] = title
-
-			var path = convertTitleToURL(metadata.Title[language])
-			if metadata.Path == nil {
-				metadata.Path = make(map[string]string)
-			}
-			metadata.Path[language] = path
-			
-			summaryJson, err := summarizeSubtitle(subtitle, language, metadata.Title[language])
-			if (err != nil) {
-				log.Printf("❌ Failed to summarize subtitle: %v", err)
-				time.Sleep(1 * time.Second)
-				continue
-			}
-			if metadata.Answer== nil {
-				metadata.Answer = make(map[string]string)
-			}
-			metadata.Answer[language] = summaryJson.Answer
-
-			if metadata.Summary == nil {
-				metadata.Summary = make (map[string]string)
-			}
-			metadata.Summary[language] = summaryJson.Content
-
-			videoProcessingMetadataDTO.Metadata = *metadata
-			videoQueue.Add(videoProcessingMetadataDTO)
-
-			log.Println("🚀 [2] Set Status ", videostate.StatusSummarizeProcessed)
-			videoQueue.SetStatus(videoId, language, videostate.StatusSummarizeProcessed)
-
-			go func(){
-				var metadata = videoQueue.GetVideoMeta(videoId, language)
-				if err := pushMetadataToDynamoDB(*metadata); err != nil {
-					log.Printf("❌ Failed to push metadata to DynamoDB: %v", err)
-				}else{
-					if err := pushCategoryStatsToDynamoDB(*metadata, language); err != nil{
-						log.Printf("❌ Failed to push category to DynamoDB: %v", err)
-					}
-				}
-			}()
-
+			videoProcessingMetadataDTO = processingQueueVideoSummarize(videoId, language, videoProcessingMetadataDTO )
 			break
 		}
 		// Check the status
@@ -1280,6 +1284,7 @@ func convertMultilingualToSingleLingual(multilingual *HandleSummaryRequestRespon
 }
 
 func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
+
     if r.Method != http.MethodPost {
         http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
         return
@@ -1287,13 +1292,14 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 
 	// get prompt http://localhost:8080/summary/{type} it could be direct-video-digest or download-and-digest
 	parts := strings.Split(r.URL.Path, "/")
+	fragmentType := ""
 	if len(parts) < 3 {
-		http.Error(w, "missing type", http.StatusBadRequest)
-		return
+		fragmentType = "download-and-digest"
+		//http.Error(w, "missing type", http.StatusBadRequest)
+		// return
+	}else {
+		fragmentType = parts[2]
 	}
-
-	fragmentType := parts[2]
-
 
     // Parse URL query parameters
     //queryParams := r.URL.Query()
@@ -1741,8 +1747,8 @@ func main() {
 
     // Create your router
     mux := http.NewServeMux()
-    mux.HandleFunc("/summary", handleSummaryRequest)
 	mux.HandleFunc("/summary/", handleSummaryRequest)
+    mux.HandleFunc("/summary", handleSummaryRequest)
     mux.HandleFunc("/redirects", handleGoogleRedirect)
 	mux.HandleFunc("/summary/category", handleCategorySummaryRequest) // New endpoint
     mux.HandleFunc("/login", handleGoogleLogin)
