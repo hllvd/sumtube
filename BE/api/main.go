@@ -1171,7 +1171,7 @@ func processingVideoQueue(videoId string, language string) {
 	}
 
 	// direct-video-digest or download-and-digest
-	var summaryType = videoQueue.GetSummaryType(videoId, language)
+	var summaryType = videoQueue.GetPipeline(videoId, language)
 
 	videoQueue.SetTTLMetadata(videoId, language, ttl)
 	
@@ -1327,7 +1327,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-	videoQueue.SetSummaryType(videoID, lang, fragmentType)
+	videoQueue.SetPipeline(videoID, lang, fragmentType)
 
 	println("videoQueue.Exists")
 	if (videoQueue.Exists(videoID, lang) == false) {

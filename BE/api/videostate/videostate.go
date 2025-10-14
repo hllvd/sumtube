@@ -30,7 +30,7 @@ type VideoStatus string
 type ProcessingVideo struct {
 	VideoID          string
 	Language         string
-	SummaryType		 string
+	Pipeline		 string
 	SubtitleContent  string
 	Expires          time.Time
 	Status           VideoStatus
@@ -219,26 +219,26 @@ func (p *Processor) SetTTLMetadata(videoID string, language string, ttl int) {
 	return
 }
 
-func (p *Processor) SetSummaryType(videoID string, language string, summaryType string) {
+func (p *Processor) SetPipeline(videoID string, language string, pipeline string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	for i, v := range p.videos {
 		if v.VideoID == videoID && v.Language == language {
-			p.videos[i].SummaryType = summaryType
+			p.videos[i].Pipeline = pipeline
 			return
 		}
 	}
 	return
 }
 
-func (p *Processor) GetSummaryType(videoID string, language string) string {
+func (p *Processor) GetPipeline(videoID string, language string) string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	for _, v := range p.videos {
 		if v.VideoID == videoID && v.Language == language {
-			return v.SummaryType
+			return v.Pipeline
 		}
 	}
 	return ""
