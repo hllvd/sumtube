@@ -1,0 +1,2 @@
+Now, summarize this text with title `[What|Why|Who|Where|When|How|How to|How much] $$title$$ ?`  
+It is IMPORTANT that the output should be in **$$language$$** language.

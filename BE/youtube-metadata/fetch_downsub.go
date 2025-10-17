@@ -107,17 +107,26 @@ func FetchMetadataFromDownsub(videoID string) (*DownsubResponse, error) {
 func convertDownSubResponseToFlatResponse(downsubInfo *DownsubResponse) *YoutubeMetadataResponse {
 	langMap := map[string]string{
 		"portuguese": "pt",
-		"english":    "en",
-		"spanish":    "es",
-		"italian":    "it",
-		"french":     "fr",
+		"english":   "en",
+		"spanish":   "es",
+		"italian":   "it",
+		"french":    "fr",
+		"german":    "de",
+		"russian":   "ru",
+		"arabic":    "ar",
+		"japanese":  "ja",
+		"chinese":   "zh",
+		"korean":    "ko",
 	}
+	
 
 	captions := make([]Caption, 0)
 
 	for _, subtitle := range downsubInfo.Data.Subtitles {
-		langName := strings.ToLower(strings.Split(subtitle.Language, " ")[0])
+		langName := strings.TrimSpace(strings.ToLower(strings.Split(subtitle.Language, " ")[0]))
+		
 		langCode, ok := langMap[langName]
+
 		if !ok {
 			continue
 		}
