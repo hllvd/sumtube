@@ -1231,6 +1231,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
         return
     }
+	println("teste")
 
     // Parse URL query parameters
     //queryParams := r.URL.Query()
