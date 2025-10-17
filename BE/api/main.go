@@ -495,6 +495,37 @@ func parseJSONContent(jsonString string) (map[string]string, error) {
 
 
 func parseFields(input string) (VideoGPTSummary, error)  {
+
+	// Helper functions needed:
+	getStringPtr := func (s string) *string {
+		if s == "" {
+			return nil
+		}
+		return &s
+	}
+
+	getInt64Ptr := func(s string) *int64 {
+		if s == "" {
+			return nil
+		}
+		val, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return nil
+		}
+		return &val
+	}
+
+	getTimePtr := func(s string) *time.Time {
+		if s == "" {
+			return nil
+		}
+		t, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			return nil
+		}
+		return &t
+	}
+
     // Regex with (?s) flag to make . match newlines
     re := regexp.MustCompile(`(?s)╔\$(.*?)╗`)
     matches := re.FindAllStringSubmatch(input, -1)
@@ -526,10 +557,15 @@ func parseFields(input string) (VideoGPTSummary, error)  {
     // }
 
     summary := VideoGPTSummary{
-		Answer:  result["answer"],
-		Content: result["content"],
-		Lang:    result["lang"],
-		Title:   result["title"],
+		Answer:      result["answer"],
+		Content:     result["content"],
+		Lang:        result["lang"],
+		Title:       result["title"],
+		Type:        getStringPtr(result["type"]),
+		Likes:       getInt64Ptr(result["likes"]),
+		ChannelName: getStringPtr(result["chanel_name"]),
+		ChannelID:   getStringPtr(result["channel_identifier"]),
+		PublishDate: getTimePtr(result["publish_date"]),
 	}
 
 	return summary, nil
@@ -866,10 +902,15 @@ type HandleSummarySingleLanguageRequestResponse struct {
 	
 }
 type VideoGPTSummary struct {
-	Answer  string `json:"answer"`
-	Content string `json:"content"`
-	Lang    string `json:"lang"`
-	Title   string `json:"title"`
+    Answer           string     `json:"answer"`
+    Content          string     `json:"content"`
+    Lang            string     `json:"lang"`
+    Title           string     `json:"title"`
+    Type            *string    `json:"type,omitempty"`
+    Likes           *int64     `json:"likes,omitempty"`
+    ChannelName     *string    `json:"channel_name,omitempty"`
+    ChannelID       *string    `json:"channel_identifier,omitempty"`
+    PublishDate     *time.Time `json:"publish_date,omitempty"`
 }
 
 type DynamoDbResponseToJson struct {
@@ -1122,8 +1163,14 @@ func processingQueueVideoSummarize(videoId string, language string, videoProcess
 		metadata.Path = make(map[string]string)
 	}
 	metadata.Path[language] = path
+
+	prompt, err := summarizeText(subtitle, language, metadata.Title[language])
+	if err != nil {
+		log.Printf("error summarizing caption: %v", err)
+		return videoProcessingMetadataDTO
+	}
 	
-	summaryJson, err := summarizeSubtitle(subtitle, language, metadata.Title[language])
+	summaryJson, err := summarizeSubtitle(prompt)
 	if (err != nil) {
 		log.Printf("❌ Failed to summarize subtitle: %v", err)
 		time.Sleep(1 * time.Second)
@@ -1209,7 +1256,7 @@ func processingVideoQueue(videoId string, language string) {
 
 		}
 		
-		//Metadata Handler
+		// Metadata Handler
 		println(">>>>>>>>>>> BEFORE Fetch metadata")
 		if (videoQueue.GetStatus(videoId, language) == videostate.StatusPending){
 			videoQueue.DecreaseTTLMetadata(videoId, language)
@@ -1229,11 +1276,13 @@ func processingVideoQueue(videoId string, language string) {
 		// Check the status
 		println("[1] GET Status: ", videoQueue.GetStatus(videoId, language))
 
+		// Download Handler
 		println(">>>>>>>> BEFORE Download")
 		if (videoQueue.GetStatus(videoId, language) == videostate.StatusMetadataProcessed){
 			videoProcessingMetadataDTO = processingQueueVideoDownloadCaps(videoId, language, videoProcessingMetadataDTO)
 		}
 		
+		// Summarize Handle r
 		println(">>>>>>>> BEFORE Summarize")
 		if (videoQueue.GetStatus(videoId, language) == videostate.StatusDownloadProcessed){
 			videoProcessingMetadataDTO = processingQueueVideoSummarize(videoId, language, videoProcessingMetadataDTO )
@@ -1583,13 +1632,8 @@ func runMetadataAndCapsFetcherAsync(videoURL string, lang string) (*HandleSummar
 	return metadataResponse, metadata, nil
 }
 
-func summarizeSubtitle(subtitle string, lang string, title string) (*VideoGPTSummary, error) {
-	summary, err := summarizeText(subtitle, lang, title)
-	if err != nil {
-		return nil, fmt.Errorf("error summarizing caption: %v", err)
-	}
-
-	sanitizedSummary, err := parseFields(summary)
+func summarizeSubtitle(prompt string) (*VideoGPTSummary, error) {
+	sanitizedSummary, err := parseFields(prompt)
 	if err != nil {
 		return nil, fmt.Errorf("error sanitizing summary JSON: %v", err)
 	}

@@ -123,8 +123,10 @@ func convertDownSubResponseToFlatResponse(downsubInfo *DownsubResponse) *Youtube
 	captions := make([]Caption, 0)
 
 	for _, subtitle := range downsubInfo.Data.Subtitles {
-		langName := strings.ToLower(strings.Split(subtitle.Language, " ")[0])
+		langName := strings.TrimSpace(strings.ToLower(strings.Split(subtitle.Language, " ")[0]))
+		
 		langCode, ok := langMap[langName]
+
 		if !ok {
 			continue
 		}
