@@ -36,10 +36,25 @@ function YTSummarizerComponent() {
   }, []) // Empty dependency array means this runs once on component mount
 
   const extractVideoId = (url: string) => {
-    const regExp =
-      /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/
-    const match = url.match(regExp)
-    return match && match[2].length === 11 ? match[2] : null
+    try {
+      // Normalize the URL
+      const cleanedUrl = url.trim()
+
+      // Match common YouTube patterns
+      const regExp =
+        /(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|v\/|embed\/|live\/))([a-zA-Z0-9_-]{11})/
+
+      const match = cleanedUrl.match(regExp)
+      if (match && match[1]) {
+        return match[1]
+      }
+
+      // Fallback for full watch URLs
+      const urlObj = new URL(cleanedUrl)
+      return urlObj.searchParams.get("v")
+    } catch {
+      return null
+    }
   }
 
   const fetchSummary = async (
@@ -117,6 +132,10 @@ function YTSummarizerComponent() {
     e.preventDefault()
     const videoId = extractVideoId(videoUrl)
     if (!videoId) return alert("Invalid YouTube URL")
+
+    // Normalize to watch?v= format
+    const normalizedUrl = `https://www.youtube.com/watch?v=${videoId}`
+    setVideoUrl(normalizedUrl)
 
     setIsLoading(true)
     setVideoInfo(null)
