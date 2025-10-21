@@ -18,11 +18,14 @@ import (
 )
 
 
-var dynamoDBTableName = os.Getenv("DYNAMODB_TABLE_NAME")
+
+
 
 func main() {
+	
 	_ = godotenv.Load(".env")
-
+	
+	var dynamoDBTableName = os.Getenv("DYNAMODB_TABLE_NAME")
 	if dynamoDBTableName == "" {
 		log.Println("Please add DYNAMODB_TABLE_NAME to .env file")
 	}
