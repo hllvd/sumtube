@@ -24,4 +24,13 @@
    <sitemap>
     <loc>https://sumtube.io/static/sitemaps/sitemap-ar.xml</loc>
   </sitemap>
+     <sitemap>
+    <loc>https://sumtube.io/static/sitemaps/sitemap-ko.xml</loc>
+  </sitemap>
+     <sitemap>
+    <loc>https://sumtube.io/static/sitemaps/sitemap-zh.xml</loc>
+  </sitemap>
+     <sitemap>
+    <loc>https://sumtube.io/static/sitemaps/sitemap-ja.xml</loc>
+  </sitemap>
 </sitemapindex>
