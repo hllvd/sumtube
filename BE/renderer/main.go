@@ -424,13 +424,23 @@ func splitURLPath(rawURL string) ([]string, error) {
 	segments := strings.Split(u.Path, "/")
 	var parts []string
 	for _, segment := range segments {
-		if segment != "" {
-			parts = append(parts, segment)
+		if segment == "" {
+			continue
 		}
+
+		// Decode percent-encoding (like %E3%83%A1 → メ)
+		decoded, err := url.PathUnescape(segment)
+		if err != nil {
+			// fall back to raw if decoding fails
+			decoded = segment
+		}
+
+		parts = append(parts, decoded)
 	}
 
 	return parts, nil
 }
+
 
 type RouteType int
 
@@ -453,8 +463,46 @@ func isVideoID(s string) bool {
 }
 
 func isLikelyTitle(s string) bool {
-	return strings.Contains(s, "-") && !isVideoID(s)
+	if isVideoID(s) {
+		return false
+	}
+
+	// Decode possible percent-encoded UTF-8 characters (%E3%81%AA etc.)
+	if decoded, err := url.PathUnescape(s); err == nil {
+		s = decoded
+	}
+
+	// If it contains a dash and non-ASCII, it's probably a title
+	if strings.Contains(s, "-") {
+		return true
+	}
+
+	// Check for the presence of Unicode ranges for major writing systems
+	for _, r := range s {
+		switch {
+		case unicode.Is(unicode.Han, r):       // Chinese / Japanese Kanji
+			return true
+		case unicode.Is(unicode.Hiragana, r):  // Japanese Hiragana
+			return true
+		case unicode.Is(unicode.Katakana, r):  // Japanese Katakana
+			return true
+		case unicode.Is(unicode.Hangul, r):    // Korean
+			return true
+		case unicode.In(r, unicode.Arabic):    // Arabic
+			return true
+		}
+	}
+
+	// Also consider Latin characters with accents (for e.g., French titles)
+	for _, r := range s {
+		if r > unicode.MaxASCII {
+			return true
+		}
+	}
+
+	return false
 }
+
 
 // check if the route type based on URL
 func GetRouteType(segments []string) RouteType {
