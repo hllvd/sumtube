@@ -924,7 +924,7 @@ type DynamoDbResponseToJson struct {
 	LikeCount  			int    `dynamodbav:"like_count" json:"like_count"`
     Lang       			string `dynamodbav:"lang" json:"lang"`
 	VideoLang  			string `dynamodbav:"video_lang" json:"videoLang"`
-    ChannelId 			string `dynamodbav:"uploader_id" json:"channelId"`
+    ChannelId 			string `dynamodbav:"channel_id" json:"channel_id"`
     UploadDate 			string `dynamodbav:"video_upload_date" json:"uploadDate"`
 	ArticleUploadDateTime string `dynamodbav:"article_update_datetime" json:"articleUploadDateTime"`
     Duration   			int `dynamodbav:"duration" json:"duration"` // or float64 if needed
