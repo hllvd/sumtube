@@ -78,9 +78,8 @@ type MetadataSingleLanguage struct {
     Path               	  string `json:"path,omitempty"`
     Paths                 map[string]string `json:"paths,omitempty"`              
     Status             	  string `json:"status,omitempty"`            
-	UploaderID            string `json:"uploader_id,omitempty"`
+	ChannelId            string `json:"channel_id,omitempty"`
 	UploadDate            string `json:"video_upload_date,omitempty"`
-	ChannelID			  string `json:"channel_id,omitempty"`
 	ArticleUploadDateTime string `json:"article_update_datetime,omitempty"`
 	Duration              int `json:"duration,omitempty"`
 	LikeCount			  int `json:"like_count,omitempty"`
@@ -948,7 +947,7 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
 
     answer := result.Answer
     contentTitle := result.Title
-    uploaderId := result.UploaderID
+    uploaderId := result.ChannelId
     paths := make(map[string]string)
 
     // Create link hreflang

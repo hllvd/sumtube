@@ -16,7 +16,7 @@ type Metadata struct {
     Answer                map[string]string `json:"answer,omitempty"`           // multilingual
     Path               	  map[string]string `json:"path,omitempty"`             // multilingual
     Status             	  map[string]string `json:"status,omitempty"`           // multilingual
-	UploaderID            string `json:"uploader_id,omitempty"`
+	ChannelId            string `json:"channel_id,omitempty"`
 	UploadDate            string `json:"video_upload_date,omitempty"`
 	ChannelName			  string `json:"channel_name,omitempty"`
 	ArticleUploadDateTime string `json:"article_update_datetime,omitempty"`

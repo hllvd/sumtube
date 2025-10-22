@@ -9,7 +9,7 @@ type ApiResponseSummary struct {
     Answer  string `json:"answer,omitempty"`
     Path    string `json:"path,omitempty"`
     Status  string `json:"status"` // Mandatory field
-	UploaderID string `json:"uploader_id,omitempty"`
+	ChannelId string `json:"channel_id,omitempty"`
 	UploadDate string `json:"video_upload_date,omitempty"`
 	ArticleUploadDateTime string `json:"article_update_datetime,omitempty"`
 	Duration string `json:"duration,omitempty"`
@@ -24,7 +24,7 @@ type DynamoResponseSummary struct {
     Answer  string `json:"answer,omitempty"`
     Path    string `json:"path,omitempty"`
     Status  string `json:"status"` // Mandatory field
-	UploaderID string `json:"uploader_id,omitempty"`
+	ChannelId string `json:"channel_id,omitempty"`
 	UploadDate string `json:"video_upload_date,omitempty"`
 	ArticleUploadDateTime string `json:"article_update_datetime,omitempty"`
 	Duration string `json:"duration,omitempty"`

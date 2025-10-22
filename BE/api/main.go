@@ -108,7 +108,7 @@ type VideoMetadata struct {
 	Title        string    `json:"title"`
 	ViewCount    string    `json:"view_count"`
 	LengthSeconds string   `json:"length_seconds"`
-	UploaderID    string    `json:"uploader_id"`
+	ChannelId    string    `json:"channel_id"`
 	ChannelName  string    `json:"channel_name"`
 	ChannelURL   string    `json:"channel_url"`
 	PublishDate  string    `json:"publish_date"`
@@ -393,7 +393,7 @@ func pushMetadataToDynamoDB(data videostate.Metadata) error {
         },
 
 		// GSI for quering by CHAN#{Channel Name}
-        "GSI2PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("CHAN#%s", data.ChannelName)},
+        "GSI2PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("CHAN#%s", data.ChannelId)},
         "GSI2SK": &dynamodbtypes.AttributeValueMemberS{
             Value: fmt.Sprintf("UPL#%s", data.UploadDate), //  Video Upload
         },
@@ -403,7 +403,7 @@ func pushMetadataToDynamoDB(data videostate.Metadata) error {
 
         "lang":                   &dynamodbtypes.AttributeValueMemberS{Value: data.Lang},
 
-        "uploader_id":            &dynamodbtypes.AttributeValueMemberS{Value: data.UploaderID},
+        "channel_id":            &dynamodbtypes.AttributeValueMemberS{Value: data.ChannelId},
         "video_upload_date":      &dynamodbtypes.AttributeValueMemberS{Value: data.UploadDate}, // yt publish date
         "duration":               &dynamodbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%.2f", float64(data.Duration))},
         "channel_name":             &dynamodbtypes.AttributeValueMemberS{Value: data.ChannelName},
@@ -564,7 +564,7 @@ func parseFields(input string) (VideoGPTSummary, error)  {
 		Type:        getStringPtr(result["type"]),
 		Likes:       getInt64Ptr(result["likes"]),
 		ChannelName: getStringPtr(result["chanel_name"]),
-		ChannelID:   getStringPtr(result["channel_identifier"]),
+		ChannelId:   getStringPtr(result["channel_identifier"]),
 		PublishDate: getTimePtr(result["publish_date"]),
 	}
 
@@ -829,7 +829,7 @@ func getLatestVideosByCategoryFromDynamoDB(lang string, category string, minLike
             meta.UploadDate = v.Value
         }
         if v, ok := item["uploader_id"].(*dynamodbtypes.AttributeValueMemberS); ok {
-            meta.UploaderID = v.Value
+            meta.ChannelId = v.Value
         }
         if v, ok := item["channel_name"].(*dynamodbtypes.AttributeValueMemberS); ok {
             meta.ChannelName = v.Value
@@ -872,7 +872,7 @@ type HandleSummaryRequestResponse struct {
 	Answer	    map[string]string	`json:"answer"`
 	Status      map[string]string  `json:"status"`
 	Lang        string  `json:"lang"`
-	UploaderID  string  `json:"uploader_id"`
+	ChannelId  string  `json:"channel_id"`
 	UploadDate  string  `json:"video_upload_date"`
 	ArticleUploadDateTime string `json:"article_update_datetime"`
 	Duration    int 	`json:"duration"`
@@ -891,7 +891,7 @@ type HandleSummarySingleLanguageRequestResponse struct {
 	Answer	     	string	`json:"answer"`
 	Status       	string  `json:"status"`
 	Lang        	string  `json:"lang"`
-	UploaderID  	string  `json:"uploader_id"`
+	ChannelId  		string  `json:"channel_id"`
 	UploadDate  	string  `json:"video_upload_date"`
 	ArticleUploadDateTime string `json:"article_update_datetime"`
 	Duration    	int 	`json:"duration"`
@@ -909,7 +909,7 @@ type VideoGPTSummary struct {
     Type            *string    `json:"type,omitempty"`
     Likes           *int64     `json:"likes,omitempty"`
     ChannelName     *string    `json:"channel_name,omitempty"`
-    ChannelID       *string    `json:"channel_identifier,omitempty"`
+    ChannelId      *string    `json:"channel_identifier,omitempty"`
     PublishDate     *time.Time `json:"publish_date,omitempty"`
 }
 
@@ -924,11 +924,11 @@ type DynamoDbResponseToJson struct {
 	LikeCount  			int    `dynamodbav:"like_count" json:"like_count"`
     Lang       			string `dynamodbav:"lang" json:"lang"`
 	VideoLang  			string `dynamodbav:"video_lang" json:"videoLang"`
-    UploaderID 			string `dynamodbav:"uploader_id" json:"uploaderId"`
+    ChannelId 			string `dynamodbav:"uploader_id" json:"channelId"`
     UploadDate 			string `dynamodbav:"video_upload_date" json:"uploadDate"`
 	ArticleUploadDateTime string `dynamodbav:"article_update_datetime" json:"articleUploadDateTime"`
     Duration   			int `dynamodbav:"duration" json:"duration"` // or float64 if needed
-	ChannelName   		string `dynamodbav:"channel_name" json:"channelId"`
+	ChannelName   		string `dynamodbav:"channel_name" json:"channel_name"`
 	DownsubDownloadCap 	string `dynamodbav:"downsub_download_cap" json:"downsubDownloadCap"`
 }
 
@@ -995,7 +995,7 @@ func loadContentWhenItsCached(videoID string, lang string) (videostate.Metadata,
 			Answer:                dynamoDbResponse.Answer,
 			Path:                  dynamoDbResponse.Path,
 			Status:                dynamoDbResponse.Status,
-			UploaderID:            dynamoDbResponse.UploaderID,
+			ChannelId:             dynamoDbResponse.ChannelId,
 			UploadDate:            dynamoDbResponse.UploadDate,
 			ArticleUploadDateTime: dynamoDbResponse.ArticleUploadDateTime,
 			Duration:              dynamoDbResponse.Duration,
@@ -1321,7 +1321,7 @@ func convertMultilingualToSingleLingual(multilingual *HandleSummaryRequestRespon
 		Content: 			multilingual.Content[language],
 		Status: 			multilingual.Status[language],			
 		Lang:               multilingual.VideoLang,
-		UploaderID:         multilingual.UploaderID,
+		ChannelId:          multilingual.ChannelId,
 		UploadDate:         multilingual.UploadDate,   
 		ArticleUploadDateTime: multilingual.ArticleUploadDateTime,
 		Duration:           multilingual.Duration,
@@ -1414,7 +1414,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 				Lang:                  content.Lang,
 				VideoLang: 	   		   content.VideoLang,
 				Path:                  content.Path,
-				UploaderID:            content.UploaderID,
+				ChannelId:             content.ChannelId,
 				UploadDate:            content.UploadDate,
 				ChannelName: 		   content.ChannelName,
 				ArticleUploadDateTime: content.ArticleUploadDateTime,
@@ -1463,7 +1463,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		VideoLang:   currentMetadata.VideoLang,
 		Path:		 currentMetadata.Path,
 		Status:      currentMetadata.Status,
-		UploaderID:  currentMetadata.UploaderID,
+		ChannelId:   currentMetadata.ChannelId,
 		UploadDate:  currentMetadata.UploadDate,
 		ChannelName:   currentMetadata.ChannelName,
 		ArticleUploadDateTime: currentMetadata.ArticleUploadDateTime,
@@ -1559,7 +1559,7 @@ func convertHandleSummaryRequestResponseToVideoStateMetadata(metadata *HandleSum
 		Path:                  metadata.Path,
 		Category:              metadata.Category,
 		Lang:                  metadata.Lang,
-		UploaderID:            metadata.UploaderID,
+		ChannelId:             metadata.ChannelId,
 		UploadDate:            metadata.UploadDate,
 		ChannelName: 		   metadata.ChannelName,
 		ArticleUploadDateTime: metadata.ArticleUploadDateTime,
@@ -1615,7 +1615,7 @@ func runMetadataAndCapsFetcherAsync(videoURL string, lang string) (*HandleSummar
 		Title:       title,
 		Lang:        lang,
 		Status:      status,
-		UploaderID:  metadata.UploaderID,
+		ChannelId:   metadata.ChannelId,
 		UploadDate:  metadata.PublishDate,
 		Duration:    durationInt,
 		ChannelName:   metadata.ChannelName,
@@ -1701,7 +1701,7 @@ func convertMetadataToHandleSummaryRequestResponse(metadata videostate.Metadata,
 		VideoLang:   metadata.VideoLang,
 		Path:        metadata.Path[lang],
 		Status:      metadata.Status[lang],
-		UploaderID:  metadata.UploaderID,
+		ChannelId:   metadata.ChannelId,
 		UploadDate:  metadata.UploadDate,
 		ChannelName:   metadata.ChannelName,
 		ArticleUploadDateTime: metadata.ArticleUploadDateTime,
@@ -1724,7 +1724,7 @@ func convertMetadataToHandleSummaryRequestResponse(metadata videostate.Metadata,
 //     Answer  string `json:"answer,omitempty"`
 //     Path    string `json:"path,omitempty"`
 //     Status  string `json:"status"` // Mandatory field
-// 	UploaderID string `json:"uploader_id,omitempty"`
+// 	ChannelId string `json:"uploader_id,omitempty"`
 // 	UploadDate string `json:"video_upload_date,omitempty"`
 // 	ArticleUploadDateTime string `json:"article_update_datetime,omitempty"`
 // 	Duration string `json:"duration,omitempty"`
