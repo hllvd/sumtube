@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 
 import "./App.css"
+import { extractVideoId } from "./utils/youtube"
 
 function YTSummarizerComponent() {
   const [videoUrl, setVideoUrl] = useState("")
@@ -34,28 +35,6 @@ function YTSummarizerComponent() {
       fetchSummary(apiUrl, videoId, language)
     }
   }, []) // Empty dependency array means this runs once on component mount
-
-  const extractVideoId = (url: string) => {
-    try {
-      // Normalize the URL
-      const cleanedUrl = url.trim()
-
-      // Match common YouTube patterns
-      const regExp =
-        /(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|v\/|embed\/|live\/))([a-zA-Z0-9_-]{11})/
-
-      const match = cleanedUrl.match(regExp)
-      if (match && match[1]) {
-        return match[1]
-      }
-
-      // Fallback for full watch URLs
-      const urlObj = new URL(cleanedUrl)
-      return urlObj.searchParams.get("v")
-    } catch {
-      return null
-    }
-  }
 
   const fetchSummary = async (
     apiUrl: string,
