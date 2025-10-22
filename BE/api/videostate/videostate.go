@@ -32,6 +32,7 @@ type ProcessingVideo struct {
 	Language         string
 	Pipeline		 string
 	SubtitleContent  string
+	RetrySummary	 bool
 	Expires          time.Time
 	Status           VideoStatus
 	Metadata		 Metadata
@@ -161,7 +162,7 @@ func (p *Processor) Add(newVideo ProcessingVideo) {
             if !newVideo.Expires.IsZero() {
                 p.videos[i].Expires = newVideo.Expires
             }
-            // Merge Metadata recursivamente
+            // Merge Metadata recursively
             mergeNonZero(&p.videos[i].Metadata, &newVideo.Metadata)
 			if (newVideo.Status != "") {
 				existing.Status =  newVideo.Status
@@ -179,6 +180,32 @@ func (p *Processor) Add(newVideo ProcessingVideo) {
     newVideo.Status = StatusPending
     p.videos = append(p.videos, newVideo)
 }
+
+func (p *Processor) SetRetrySummary(videoID string, language string, retrySummary bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for i, v := range p.videos {
+		if v.VideoID == videoID && v.Language == language {
+			p.videos[i].RetrySummary = retrySummary
+			return
+		}
+	}
+}
+
+func (p *Processor) GetRetrySummary(videoID string, language string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for _, v := range p.videos {
+		if v.VideoID == videoID && v.Language == language {
+			return v.RetrySummary
+		}
+	}
+	return false
+}
+
+
 
 
 func (p *Processor) DecreaseTTLMetadata(videoID string, language string) {

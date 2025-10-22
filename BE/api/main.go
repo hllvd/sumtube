@@ -1338,7 +1338,14 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
         return
     }
-	println("teste")
+	// check if exist retry param
+	// if exist, retry the video
+	retrySummary := false
+	if  r.URL.Query().Has("retry") {
+		retrySummary = true
+	}
+	println("retrySummary: ", retrySummary)
+
 
 	// get prompt http://localhost:8080/summary/{type} it could be direct-video-digest or download-and-digest
 	parts := strings.Split(r.URL.Path, "/")
