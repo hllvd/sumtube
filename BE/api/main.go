@@ -865,21 +865,22 @@ func getLatestVideosByCategoryFromDynamoDB(lang string, category string, minLike
 
 
 type HandleSummaryRequestResponse struct {
-	VideoID      string  `json:"videoId"`
-	Title       map[string]string  `json:"title"`
-	Path 		map[string]string  `json:"path"`
+	VideoID      string  			`json:"videoId"`
+	Title       map[string]string  	`json:"title"`
+	Path 		map[string]string  	`json:"path"`
 	Content	    map[string]string	`json:"content"`
 	Answer	    map[string]string	`json:"answer"`
-	Status      map[string]string  `json:"status"`
-	Lang        string  `json:"lang"`
-	ChannelId  string  `json:"channel_id"`
-	UploadDate  string  `json:"video_upload_date"`
-	ArticleUploadDateTime string `json:"article_update_datetime"`
-	Duration    int 	`json:"duration"`
-	ChannelName  string  `json:"channel_name"`
-	Category    string  `json:"category"`
-	VideoLang   string  `json:"video_lang"`
-	LikeCount 	int		`json:"like_count"`
+	Status      map[string]string  	`json:"status"`
+	Lang        string  			`json:"lang"`
+	ChannelId  	string  			`json:"channel_id"`
+	UploadDate  string  			`json:"video_upload_date"`
+	ArticleUploadDateTime string 	`json:"article_update_datetime"`
+	Duration    int 				`json:"duration"`
+	ChannelName string 				`json:"channel_name"`
+	Category    string  			`json:"category"`
+	VideoLang   string  			`json:"video_lang"`
+	LikeCount 	int					`json:"like_count"`
+	CanBeRetried map[string]bool	`json:"can_be_retried"`
 }
 
 type HandleSummarySingleLanguageRequestResponse struct {
@@ -899,6 +900,7 @@ type HandleSummarySingleLanguageRequestResponse struct {
 	Category    	string  `json:"category"`
 	VideoLang   	string  `json:"video_lang"`
 	LikeCount 		int		`json:"like_count"`
+	CanBeRetried 	bool  	`json:"can_be_retried"`
 	
 }
 type VideoGPTSummary struct {
@@ -1330,6 +1332,7 @@ func convertMultilingualToSingleLingual(multilingual *HandleSummaryRequestRespon
 		Category:           multilingual.Category,
 		VideoLang:          multilingual.VideoLang,
 		LikeCount:          multilingual.LikeCount,
+		CanBeRetried:		multilingual.CanBeRetried[language],
 	}
 }
 
@@ -1461,6 +1464,9 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	canBeRetried := videoQueue.CanBeRetried(videoID, lang)
+	multilingualCanBeRetried := map[string]bool{
+		lang: canBeRetried,
+	}
 	
 	// Handle retry requests
 	if ( retrySummaryUrlQuery && canBeRetried ) {
@@ -1488,6 +1494,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		LikeCount:   currentMetadata.LikeCount,
 		Content:	 currentMetadata.Summary,
 		Answer:		 currentMetadata.Answer,
+		CanBeRetried: multilingualCanBeRetried,
 	}
 
 	singleLangResponse := convertMultilingualToSingleLingual(&response, lang)
