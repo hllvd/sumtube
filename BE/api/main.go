@@ -1384,7 +1384,6 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 	videoQueue.SetPipeline(videoID, lang, fragmentType)
 	
 	isVideoBeingProcessed := videoQueue.Exists(videoID, lang)
-	isVideoOnRetryProcessing := videoQueue.GetRetrySummaryStatus(videoID, lang)
 
 	println("isVideoProcessing", isVideoBeingProcessed)
 	println("retrySummaryUrlQuery", retrySummaryUrlQuery)
@@ -1461,12 +1460,10 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	secondsSinceArticleUpload, err := videoQueue.GetSecondsSinceArticleUpload(videoID, lang)
+	canBeRetried := videoQueue.CanBeRetried(videoID, lang)
 	
-	// fifteen is int64
-	var fifteenMinutes int64 = (60*15)
 	// Handle retry requests
-	if ( retrySummaryUrlQuery == true && isVideoOnRetryProcessing == false && secondsSinceArticleUpload < fifteenMinutes ) {
+	if ( retrySummaryUrlQuery && canBeRetried ) {
 		println("PROCESS ON RETRY")
 		videoQueue.SetStatus(videoID, lang, videostate.StatusPending)
 		videoQueue.SetRetrySummaryStatus(videoID, lang, true)

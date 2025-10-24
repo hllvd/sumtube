@@ -182,6 +182,47 @@ func (p *Processor) Add(newVideo ProcessingVideo) {
     p.videos = append(p.videos, newVideo)
 }
 
+func (p *Processor) CanBeRetried(videoID, language string) bool {
+	// 1️⃣ Avoid retrying if already flagged as retrying
+	if p.GetRetrySummaryStatus(videoID, language) {
+		return false
+	}
+
+	// 2️⃣ Check how much time has passed since the article upload
+	const fifteenMinutes = int64(60 * 15)
+
+	seconds, err := p.GetSecondsSinceArticleUpload(videoID, language)
+	if err != nil {
+		// If we can’t get the time, it’s safer to allow retry only if metadata is incomplete
+		meta := p.GetVideoMeta(videoID, language)
+		if meta == nil {
+			return false
+		}
+		if meta.Answer[language] == "" || meta.Summary[language] == "" {
+			return true
+		}
+		return false
+	}
+
+	// 3️⃣ If it's too recent, allow retry
+	if seconds < fifteenMinutes {
+		return true
+	}
+
+	// 4️⃣ If enough time has passed, retry only if missing content
+	meta := p.GetVideoMeta(videoID, language)
+	if meta == nil {
+		return false
+	}
+
+	if meta.Answer[language] == "" || meta.Summary[language] == "" {
+		return true
+	}
+
+	return false
+}
+
+
 
 // GetSecondsSinceArticleUpload calculates how many seconds have passed
 // since the ArticleUploadDateTime stored in Metadata.
