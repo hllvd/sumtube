@@ -181,7 +181,7 @@ func (p *Processor) Add(newVideo ProcessingVideo) {
     p.videos = append(p.videos, newVideo)
 }
 
-func (p *Processor) SetRetrySummary(videoID string, language string, retrySummary bool) {
+func (p *Processor) SetRetrySummaryStatus(videoID string, language string, retrySummary bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -193,7 +193,7 @@ func (p *Processor) SetRetrySummary(videoID string, language string, retrySummar
 	}
 }
 
-func (p *Processor) GetRetrySummary(videoID string, language string) bool {
+func (p *Processor) GetRetrySummaryStatus(videoID string, language string) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 

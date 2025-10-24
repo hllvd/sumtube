@@ -1191,6 +1191,7 @@ func processingQueueVideoSummarize(videoId string, language string, videoProcess
 
 	log.Println("🚀 [2] Set Status ", videostate.StatusSummarizeProcessed)
 	videoQueue.SetStatus(videoId, language, videostate.StatusSummarizeProcessed)
+	videoQueue.SetRetrySummaryStatus(videoId, language, false)
 
 	go func(){
 		var metadata = videoQueue.GetVideoMeta(videoId, language)
@@ -1340,11 +1341,11 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
     }
 	// check if exist retry param
 	// if exist, retry the video
-	retrySummary := false
-	if  r.URL.Query().Has("retry") {
-		retrySummary = true
-	}
-	println("retrySummary: ", retrySummary)
+	var retrySummaryUrlQuery bool 
+	retryParam := strings.ToLower(r.URL.Query().Get("retry"))
+	retrySummaryUrlQuery = retryParam == "true" || retryParam == "1" || retryParam == "yes"
+
+	println("retrySummaryUrlQuery:", retrySummaryUrlQuery)
 
 
 	// get prompt http://localhost:8080/summary/{type} it could be direct-video-digest or download-and-digest
@@ -1357,10 +1358,6 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 	}else {
 		fragmentType = parts[2]
 	}
-
-    // Parse URL query parameters
-    //queryParams := r.URL.Query()
-    // := queryParams.Get("force") == "true"
 
 	// print all videos from videoQueue.Videos()
 	dump_print_all_videos()
@@ -1385,11 +1382,15 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
     }
 
 	videoQueue.SetPipeline(videoID, lang, fragmentType)
+	
+	isVideoBeingProcessed := videoQueue.Exists(videoID, lang)
+	isVideoOnRetryProcessing := videoQueue.GetRetrySummaryStatus(videoID, lang)
 
-	println("videoQueue.Exists")
-	if (videoQueue.Exists(videoID, lang) == false) {
+	println("isVideoProcessing", isVideoBeingProcessed)
+	println("retrySummaryUrlQuery", retrySummaryUrlQuery)
+
+	if ( isVideoBeingProcessed == false ) {
 		//dump_print_all_videos()
-	    
 		videoProcessingMetadataDTO := videostate.ProcessingVideo{
 			VideoID: videoID,
 			Language: lang,
@@ -1437,6 +1438,12 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 
 			println("Set Status", videostate.VideoStatus(metadata.Status[lang]))
 			videoQueue.SetStatus(videoID, lang, videostate.VideoStatus(metadata.Status[lang]))
+
+			
+			// if retrySummaryUrlQuery == true && isVideoOnRetryProcessing == false {
+			// 	videoQueue.SetRetrySummaryStatus(videoID, lang, retrySummaryUrlQuery)
+			// 	videoQueue.SetStatus(videoID, lang, videostate.StatusPending)
+			// }
 			
 			println("Processing video sync", videoID, lang)
 			// Processing video sync
@@ -1452,6 +1459,13 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 				processingVideoQueue(videoID, lang)
 			}()
 		}
+	}
+
+	// Handle retry requests
+	if ( retrySummaryUrlQuery == true && isVideoOnRetryProcessing == false ) {
+		println("PROCESS ON RETRY")
+		videoQueue.SetStatus(videoID, lang, videostate.StatusPending)
+		videoQueue.SetRetrySummaryStatus(videoID, lang, true)
 	}
 
 	// print all videos from videoQueue.Videos()
