@@ -1461,18 +1461,16 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	secondsSinceArticleUpload, err := videoQueue.GetSecondsSinceArticleUpload(videoID, lang)
+	
+	// fifteen is int64
+	var fifteenMinutes int64 = (60*15)
 	// Handle retry requests
-	if ( retrySummaryUrlQuery == true && isVideoOnRetryProcessing == false ) {
+	if ( retrySummaryUrlQuery == true && isVideoOnRetryProcessing == false && secondsSinceArticleUpload < fifteenMinutes ) {
 		println("PROCESS ON RETRY")
 		videoQueue.SetStatus(videoID, lang, videostate.StatusPending)
 		videoQueue.SetRetrySummaryStatus(videoID, lang, true)
 	}
-
-	// print all videos from videoQueue.Videos()
-	// println("⌛ [2] Printing all videos from videoQueue.Videos()")
-	// for _, video := range videoQueue.Videos() {
-	// 	println("[2] ===> VideoID: ", video.VideoID, " Language: ", video.Language, " Status: ", video.Status)
-	// }
 	
 	currentMetadata := videoQueue.GetVideoMeta(videoID, lang)
 	

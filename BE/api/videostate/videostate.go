@@ -1,6 +1,7 @@
 package videostate
 
 import (
+	"fmt"
 	"reflect"
 	"sync"
 	"time"
@@ -180,6 +181,37 @@ func (p *Processor) Add(newVideo ProcessingVideo) {
     newVideo.Status = StatusPending
     p.videos = append(p.videos, newVideo)
 }
+
+
+// GetSecondsSinceArticleUpload calculates how many seconds have passed
+// since the ArticleUploadDateTime stored in Metadata.
+func (p *Processor) GetSecondsSinceArticleUpload(videoID string, language string) (int64, error) {
+	meta := p.GetVideoMeta(videoID, language)
+	if meta == nil {
+		return 0, fmt.Errorf("video not found for id=%s lang=%s", videoID, language)
+	}
+
+	createdStr := meta.ArticleUploadDateTime
+	if createdStr == "" {
+		return 0, fmt.Errorf("article_upload_datetime is empty")
+	}
+
+	// Try parsing with timezone first (RFC3339)
+	createdTime, err := time.Parse(time.RFC3339, createdStr)
+	if err != nil {
+		// Fallback: parse without timezone (e.g. "2025-10-24T13:42:45")
+		createdTime, err = time.Parse("2006-01-02T15:04:05", createdStr)
+		if err != nil {
+			return 0, fmt.Errorf("invalid article_upload_datetime format: %v", err)
+		}
+	}
+
+	elapsed := time.Since(createdTime.UTC())
+	return int64(elapsed.Seconds()), nil
+}
+
+
+
 
 func (p *Processor) SetRetrySummaryStatus(videoID string, language string, retrySummary bool) {
 	p.mu.Lock()
