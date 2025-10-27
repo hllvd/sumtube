@@ -83,6 +83,7 @@ type MetadataSingleLanguage struct {
 	ArticleUploadDateTime string `json:"article_update_datetime,omitempty"`
 	Duration              int `json:"duration,omitempty"`
 	LikeCount			  int `json:"like_count,omitempty"`
+    CanBeRetried          bool `json:"can_be_retried"`
 }
 
 
@@ -709,6 +710,11 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string, video ...str
             videoId = video[0]
         }
 
+        // check if it contains retry = true on the url as query param
+        retryParam := strings.ToLower(r.URL.Query().Get("retry"))
+	    var retrySummaryUrlQuery = retryParam == "true" || retryParam == "1" || retryParam == "yes"
+
+
         tmpl, err := template.ParseFS(templateFS, filepath.Join("templates", "home.html"))
 
         dir, _ := os.Getwd()
@@ -724,13 +730,15 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string, video ...str
             Language string
             Path     string
             ApiUrl   string
-            VideoId  string  // Add VideoId to the template data
+            VideoId  string
+            Retry    bool
             T        func(string) string // Translation function
         }{
             Language: lang,
             Path:     r.URL.Path,
             ApiUrl:   os.Getenv("SUMTUBE_API_PUBLIC"),
             VideoId:  videoId,
+            Retry :   retrySummaryUrlQuery,
             T: func(key string) string {
                 return t(lang, key)
             },
@@ -996,6 +1004,7 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
         VideoDurationMinutes int
         ReadingTimeMinutes   int
         TimeSavedMinutes     int
+        CanBeRetried          bool
         Content              template.HTML
         Answer               template.HTML
         T        func(string) string // Translation function
@@ -1014,6 +1023,7 @@ func loadBlog(w http.ResponseWriter, r *http.Request, lang, title, videoId strin
         ReadingTimeMinutes:   readingTimeMinutes,
         RelatedVideosArr:     relatedVideos,
         TimeSavedMinutes:     timeSaved,
+        CanBeRetried:         result.CanBeRetried,
         Content:              template.HTML(ConvertMarkdownToHTML(ReplaceMarkdownTimestamps(videoId, content))),
         Answer:               template.HTML(ConvertMarkdownToHTML(answer)),
         T: func(key string) string {

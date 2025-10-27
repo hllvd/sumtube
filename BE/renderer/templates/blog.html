@@ -76,6 +76,36 @@
         <article class="space-y-4 text-lg leading-relaxed mt-3 markdown">
           {{.Content}}
         </article>
+        {{ if eq .Content "" }}
+          There's a error on this page. I will retry summarizing it again
+
+          <script>
+            setTimeout(()=>{
+              const vid = "{{.VideoId}}";
+              const lang = "{{.Language}}"
+              const protocol = window.location.protocol;
+              const hostname = window.location.hostname;
+              const url = `${protocol}//${hostname}/${lang}/${vid}?retry=true`
+              
+              window.location.href = url
+
+            },4000)
+          </script>
+        {{ end }}
+
+        {{ if .CanBeRetried}}
+        <div class="mt-6" >
+          <button
+            onclick="forceSummarize(this)"
+            class="inline-block bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 flex items-center gap-2"
+            data-lang = {{.Language}}
+            data-vid = {{.VideoId}}
+            id="force-summarize"
+          >
+          ↺ Summarize Again
+          </button>
+        </div>
+        {{ end }}
 
         <!-- Share Button -->
         <div class="mt-6">
@@ -87,6 +117,7 @@
             🔗 Share this summary
           </button>
         </div>
+       
 
         <script>
           function copyCurrentURL() {
@@ -103,6 +134,44 @@
               alert('Failed to copy URL to clipboard');
             });
           }
+
+          function forceSummarize(button) {
+              // Disable the button while loading
+
+              button.disabled = true
+              button.classList.add("opacity-70", "cursor-not-allowed")
+              const vid = "{{.VideoId}}";
+              const lang = "{{.Language}}"
+
+              // Store original text in case we want to revert later
+              const originalText = button.innerHTML
+
+              // Add a spinner (using Tailwind-style animation)
+              button.innerHTML = `
+                <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                </svg>
+                <span>Summarizing...</span>
+              `
+
+              // Simulate async process (e.g., API call)
+              setTimeout(() => {
+                // After done, restore button state
+                button.disabled = false
+                button.classList.remove("opacity-70", "cursor-not-allowed")
+                button.innerHTML = originalText
+
+                //check current domain with its http protocol
+                const protocol = window.location.protocol;
+                const hostname = window.location.hostname;
+                const url = `${protocol}//${hostname}/${lang}/${vid}?retry=true`
+                console.log(`Redirecting to ${url}...`)
+                window.location.href = url
+                
+              }, 3000)
+          }
+
         </script>
 
         <div class="max-w-2xl mx-auto mt-16 text-center pt-2 pb-2 bg-white">

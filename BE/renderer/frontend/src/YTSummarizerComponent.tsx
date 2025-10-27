@@ -16,11 +16,11 @@ function YTSummarizerComponent() {
   const [videoError, setVideoError] = useState<null | {
     errorMessage: string
   }>(null)
-
   // Use useEffect to handle automatic submission
   useEffect(() => {
     const root = document.getElementById("react-root")
     const videoId = root?.dataset.vid // Changed from videoId to vid
+    const retry = root?.dataset.retry?.toLowerCase() == "true" ? true : false
 
     if (videoId) {
       // Construct the YouTube URL
@@ -32,17 +32,19 @@ function YTSummarizerComponent() {
       const apiUrl = root?.dataset.apiurl || "https://api.sumtube.io"
       setIsLoading(true)
       setVideoInfo(null)
-      fetchSummary(apiUrl, videoId, language)
+      fetchSummary(apiUrl, videoId, language, retry)
     }
   }, []) // Empty dependency array means this runs once on component mount
 
   const fetchSummary = async (
     apiUrl: string,
     videoId: string,
-    language: string
+    language: string,
+    retry: boolean = false
   ) => {
     try {
-      const response = await fetch(`${apiUrl}/summary`, {
+      const url = retry ? `${apiUrl}/summary?retry=true` : `${apiUrl}/summary?`
+      const response = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

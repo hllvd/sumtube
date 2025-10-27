@@ -167,9 +167,68 @@ func getVideoMetadata(videoURL string) (*VideoMetadata, error) {
 }
 
 
+
+func removeDuplicateHyphens(s string) string {
+    // Create a new strings.Builder for efficient string concatenation
+    var result strings.Builder
+    var lastChar rune
+    
+    for i, char := range s {
+        // Skip this character if it's a hyphen and either:
+        // 1. It's not the first character and the previous character was a hyphen
+        // 2. It's the last character
+        if char == '-' {
+            if (i > 0 && lastChar == '-') || i == len(s)-1 {
+                continue
+            }
+        }
+        result.WriteRune(char)
+        lastChar = char
+    }
+    
+    return result.String()
+}
+
+func sanitizeTitle(title string) string {
+    // Create a strings.Builder for efficient string concatenation
+    var result strings.Builder
+    
+    // Keep track of last character to handle duplicates
+    var lastChar rune
+    var isFirstChar = true
+    
+    // Convert to lowercase and trim spaces
+    title = strings.TrimSpace(strings.ToLower(title))
+    
+    for _, char := range title {
+        // Skip if current character is a space, hyphen, or slash AND
+        // it's the same as the last character we wrote
+        if (unicode.IsSpace(char) || char == '-' || char == '/') {
+            // Convert all separators (spaces, hyphens, slashes) to single space
+            if !isFirstChar && lastChar != ' ' {
+                result.WriteRune(' ')
+                lastChar = ' '
+            }
+            continue
+        }
+        
+        // Write character if it's not a duplicate separator
+        result.WriteRune(char)
+        lastChar = char
+        isFirstChar = false
+    }
+    
+    // Convert result to string and trim any remaining spaces
+    sanitized := strings.TrimSpace(result.String())
+    
+    return sanitized
+}
+
+
 func convertTitleToURL(title string) string {
 	lowercaseTitle := strings.ToLower(title)
 	urlFriendly := strings.ReplaceAll(lowercaseTitle, " ", "-")
+	urlFriendly = removeDuplicateHyphens(urlFriendly)
 	var result strings.Builder
 	for _, char := range urlFriendly {
 		if unicode.IsLetter(char) || unicode.IsDigit(char) || char == '-' {
@@ -1158,6 +1217,7 @@ func processingQueueVideoSummarize(videoId string, language string, videoProcess
 	// set the same title for other languages
 	// here is where we can translate the title so the path would be translated as well.
 	title := firstNonEmptyFromMap(metadata.Title)
+	title = sanitizeTitle(title)
 	metadata.Title[language] = title
 
 	var path = convertTitleToURL(metadata.Title[language])
@@ -1193,7 +1253,7 @@ func processingQueueVideoSummarize(videoId string, language string, videoProcess
 
 	log.Println("🚀 [2] Set Status ", videostate.StatusSummarizeProcessed)
 	videoQueue.SetStatus(videoId, language, videostate.StatusSummarizeProcessed)
-	videoQueue.SetRetrySummaryStatus(videoId, language, false)
+	// videoQueue.SetRetrySummaryStatus(videoId, language, false) // this prevent looping on retrying
 
 	go func(){
 		var metadata = videoQueue.GetVideoMeta(videoId, language)
