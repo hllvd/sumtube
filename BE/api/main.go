@@ -1253,7 +1253,7 @@ func processingQueueVideoSummarize(videoId string, language string, videoProcess
 
 	log.Println("🚀 [2] Set Status ", videostate.StatusSummarizeProcessed)
 	videoQueue.SetStatus(videoId, language, videostate.StatusSummarizeProcessed)
-	// videoQueue.SetRetrySummaryStatus(videoId, language, false) // this prevent looping on retrying
+	// videoQueue.SetRetrySummaryStatus(videoId, language, false) // this prevent looping when it's on retrying
 
 	go func(){
 		var metadata = videoQueue.GetVideoMeta(videoId, language)
