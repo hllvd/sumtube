@@ -725,12 +725,16 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string, video ...str
             return
         }
 
-    // Check if content exists for canonical URL
+    // Check if content exists for canonical URL and redirect if available
         var canonicalURL string
         if videoId != "" {
             result, err := GetVideoContent(videoId, lang)
             if err == nil && result.Status == "Completed" && result.Path != "" {
                 canonicalURL = fmt.Sprintf("https://sumtube.io/%s/%s/%s", lang, videoId, result.Path)
+                // Redirect to canonical URL for SEO
+                redirectPath := fmt.Sprintf("/%s/%s/%s", lang, videoId, result.Path)
+                http.Redirect(w, r, redirectPath, http.StatusMovedPermanently)
+                return
             }
         }
 
