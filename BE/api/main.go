@@ -91,7 +91,7 @@ func init() {
 }
 
 func extractVideoID(url string) (string, error) {
-	re := regexp.MustCompile(`(?:v=|\/)([0-9A-Za-z_-]{11}).*`)
+	re := regexp.MustCompile(`(?:v=|\/)([0-9A-Za-z_\-‑]{11}).*`)
 	matches := re.FindStringSubmatch(url)
 	if len(matches) < 2 {
 		return "", fmt.Errorf("no video ID found in URL: %s", url)

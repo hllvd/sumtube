@@ -80,3 +80,46 @@ End line`,
 		})
 	}
 }
+
+func TestExtractVideoID(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		expected string
+		wantErr  bool
+	}{
+		{
+			name:     "Regular video ID",
+			input:    "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+			expected: "dQw4w9WgXcQ",
+			wantErr:  false,
+		},
+		{
+			name:     "Video ID with special hyphen",
+			input:    "https://www.youtube.com/watch?v=kE‑IJLXd4ZI",
+			expected: "kE‑IJLXd4ZI",
+			wantErr:  false,
+		},
+		{
+			name:     "Short URL format",
+			input:    "https://youtu.be/kE‑IJLXd4ZI",
+			expected: "kE‑IJLXd4ZI",
+			wantErr:  false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := extractVideoID(tc.input)
+
+			if (err != nil) != tc.wantErr {
+				t.Errorf("Expected error: %v, got error: %v", tc.wantErr, err)
+				return
+			}
+
+			if result != tc.expected {
+				t.Errorf("Expected result: %s, got: %s", tc.expected, result)
+			}
+		})
+	}
+}
