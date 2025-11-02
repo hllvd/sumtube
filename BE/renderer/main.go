@@ -725,20 +725,31 @@ func loadIndex(w http.ResponseWriter, r *http.Request, lang string, video ...str
             return
         }
 
+    // Check if content exists for canonical URL
+        var canonicalURL string
+        if videoId != "" {
+            result, err := GetVideoContent(videoId, lang)
+            if err == nil && result.Status == "Completed" && result.Path != "" {
+                canonicalURL = fmt.Sprintf("https://sumtube.io/%s/%s/%s", lang, videoId, result.Path)
+            }
+        }
+
     // Prepare data to pass to the template
         data := struct {
-            Language string
-            Path     string
-            ApiUrl   string
-            VideoId  string
-            Retry    bool
-            T        func(string) string // Translation function
+            Language     string
+            Path         string
+            ApiUrl       string
+            VideoId      string
+            Retry        bool
+            CanonicalURL string
+            T            func(string) string // Translation function
         }{
-            Language: lang,
-            Path:     r.URL.Path,
-            ApiUrl:   os.Getenv("SUMTUBE_API_PUBLIC"),
-            VideoId:  videoId,
-            Retry :   retrySummaryUrlQuery,
+            Language:     lang,
+            Path:         r.URL.Path,
+            ApiUrl:       os.Getenv("SUMTUBE_API_PUBLIC"),
+            VideoId:      videoId,
+            Retry:        retrySummaryUrlQuery,
+            CanonicalURL: canonicalURL,
             T: func(key string) string {
                 return t(lang, key)
             },

@@ -16,6 +16,7 @@
     <link rel="alternate" href="https://sumtube.io/zh" hreflang="zh" />
     <link rel="alternate" href="https://sumtube.io/ko" hreflang="ko" />
     <link rel="alternate" href="https://sumtube.io/" hreflang="x-default" />
+    {{if .CanonicalURL}}<link rel="canonical" href="{{.CanonicalURL}}" />{{end}}
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://sumtube.io" />
     <meta property="og:title" content="{{call .T "title"}}" />
