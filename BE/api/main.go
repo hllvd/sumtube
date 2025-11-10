@@ -1227,6 +1227,7 @@ func processingQueueVideoSummarize(videoId string, language string, videoProcess
 	metadata.Path[language] = path
 
 	prompt, err := summarizeText(subtitle, language, metadata.Title[language])
+	println("summarizeText prompt; ", prompt)
 	if err != nil {
 		log.Printf("error summarizing caption: %v", err)
 		return videoProcessingMetadataDTO
@@ -1253,6 +1254,7 @@ func processingQueueVideoSummarize(videoId string, language string, videoProcess
 
 	log.Println("🚀 [2] Set Status ", videostate.StatusSummarizeProcessed)
 	videoQueue.SetStatus(videoId, language, videostate.StatusSummarizeProcessed)
+	
 	// videoQueue.SetRetrySummaryStatus(videoId, language, false) // this prevent looping when it's on retrying
 
 	go func(){
@@ -1271,6 +1273,7 @@ func processingQueueVideoSummarize(videoId string, language string, videoProcess
 
 
 func processingVideoQueue(videoId string, language string) {
+	println("processingVideoQueue")
 	ttl := 3
 	//videoURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoId)
 	var metadataDynamoResponse *HandleSummaryRequestResponse
@@ -1348,7 +1351,7 @@ func processingVideoQueue(videoId string, language string) {
 		// Summarize Handle r
 		println(">>>>>>>> BEFORE Summarize")
 		if (videoQueue.GetStatus(videoId, language) == videostate.StatusDownloadProcessed){
-			videoProcessingMetadataDTO = processingQueueVideoSummarize(videoId, language, videoProcessingMetadataDTO )
+			processingQueueVideoSummarize(videoId, language, videoProcessingMetadataDTO )
 			break
 		}
 		// Check the status
@@ -1451,7 +1454,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 	println("isVideoProcessing", isVideoBeingProcessed)
 	println("retrySummaryUrlQuery", retrySummaryUrlQuery)
 
-	if ( isVideoBeingProcessed == false ) {
+	if ( !isVideoBeingProcessed ) {
 		//dump_print_all_videos()
 		videoProcessingMetadataDTO := videostate.ProcessingVideo{
 			VideoID: videoID,
@@ -1461,7 +1464,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		videoQueue.Add(videoProcessingMetadataDTO)
 		println("Set Status", videostate.StatusPending)
 		videoQueue.SetStatus(videoID, lang, videostate.StatusPending)
-		println("Processing video async")
+		println("Processing video async 1")
 		content, _ := loadContentWhenItsCached(videoID, lang)
 		println("loading metadata")
 		metadata := videostate.Metadata{}
@@ -1501,11 +1504,11 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 			println("Set Status", videostate.VideoStatus(metadata.Status[lang]))
 			videoQueue.SetStatus(videoID, lang, videostate.VideoStatus(metadata.Status[lang]))
 
-			
-			// if retrySummaryUrlQuery == true && isVideoOnRetryProcessing == false {
-			// 	videoQueue.SetRetrySummaryStatus(videoID, lang, retrySummaryUrlQuery)
-			// 	videoQueue.SetStatus(videoID, lang, videostate.StatusPending)
-			// }
+			canBeRetried := videoQueue.CanBeRetried(videoID, lang)
+			if retrySummaryUrlQuery  && canBeRetried  {
+				videoQueue.SetRetrySummaryStatus(videoID, lang, retrySummaryUrlQuery)
+				videoQueue.SetStatus(videoID, lang, videostate.StatusPending)
+			}
 			
 			println("Processing video sync", videoID, lang)
 			// Processing video sync
@@ -1514,7 +1517,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 			}()
 			
 		} else {
-			println("Processing video async")
+			println("Processing video async 2")
 			go func(){
 				// Processing video async 
 				videoQueue.SetStatus(videoID, lang, videostate.StatusPending)
@@ -1527,7 +1530,7 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 	multilingualCanBeRetried := map[string]bool{
 		lang: canBeRetried,
 	}
-	
+	println("canBeRetried", canBeRetried)
 	// Handle retry requests
 	if ( retrySummaryUrlQuery && canBeRetried ) {
 		println("PROCESS ON RETRY")
