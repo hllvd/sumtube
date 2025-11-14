@@ -1489,8 +1489,8 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		println("content.Vid and status = ",content.Vid, content.Status, content.Path)
 
 		// check if answer or summary does not exist in DynamoDb for this language
-		if (content.Answer[lang] == "" && content.Summary[lang] == "" && retrySummaryUrlQuery) {
-			deleteVideoFromDynamoDB(videoID)
+		if (content.Answer[lang] == "" && content.Summary[lang] == "" ) {
+			// deleteVideoFromDynamoDB(videoID)
 			println("❌ Answer or Summary missing in DynamoDB for language:", lang)
 			content.Vid = ""
 		}
