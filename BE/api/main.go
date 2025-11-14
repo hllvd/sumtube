@@ -431,6 +431,24 @@ func stringMapToAttributeValueMap(m map[string]string) map[string]dynamodbtypes.
     return avMap
 }
 
+func deleteVideoFromDynamoDB(videoId string) error {
+	key := map[string]dynamodbtypes.AttributeValue{
+		"PK": &dynamodbtypes.AttributeValueMemberS{Value: fmt.Sprintf("VIDEO#%s", videoId)},
+		"SK": &dynamodbtypes.AttributeValueMemberS{Value: "METADATA"},
+	}
+
+	_, err := dynamoDBClient.DeleteItem(context.Background(), &dynamodb.DeleteItemInput{
+		TableName: aws.String(dynamoDBTableName),
+		Key:       key,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete video %s from DynamoDB: %w", videoId, err)
+	}
+
+	fmt.Printf("Video %s deleted from DynamoDB successfully.\n", videoId)
+	return nil
+}
+
 func pushMetadataToDynamoDB(data videostate.Metadata) error {
     // Pad LikeCount to 8 digits for correct lexicographic sort
     // paddedLikeCount := fmt.Sprintf("%08d", data.LikeCount)
@@ -1469,6 +1487,14 @@ func handleSummaryRequest(w http.ResponseWriter, r *http.Request) {
 		println("loading metadata")
 		metadata := videostate.Metadata{}
 		println("content.Vid and status = ",content.Vid, content.Status, content.Path)
+
+		// check if answer or summary does not exist in DynamoDb for this language
+		if (content.Answer[lang] == "" && content.Summary[lang] == "" && retrySummaryUrlQuery) {
+			deleteVideoFromDynamoDB(videoID)
+			println("❌ Answer or Summary missing in DynamoDB for language:", lang)
+			content.Vid = ""
+		}
+
 		if content.Vid  != "" {
 			println("🧠 Parsing cached summary content")
 			status := content.Status
