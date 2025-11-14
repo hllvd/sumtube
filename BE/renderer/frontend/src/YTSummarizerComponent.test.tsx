@@ -1,5 +1,4 @@
 import { extractVideoId } from "./utils/youtube"
-import { describe, expect, test } from "@jest/globals"
 
 describe("extractVideoId", () => {
   test("extracts video ID from standard YouTube watch URL", () => {
